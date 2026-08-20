@@ -1,0 +1,25 @@
+import os
+from pathlib import Path
+import config
+
+# Gemini LLM API Config
+GEMINI_API_KEY = config.GEMINI_API_KEY
+DEFAULT_GEMINI_MODEL = config.DEFAULT_LLM_MODEL
+
+# Privacy Decision Thresholds
+THRESHOLD_LOW_ALLOW = config.THRESHOLD_LOW_RISK
+THRESHOLD_HIGH_BLOCK = config.THRESHOLD_HIGH_RISK
+
+# File Constraints
+MAX_TEXT_BYTES = 500 * 1024        # 500 KB
+MAX_IMAGE_BYTES = 15 * 1024 * 1024  # 15 MB
+MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
+MAX_DOC_BYTES = 25 * 1024 * 1024    # 25 MB
+
+ALLOWED_IMAGE_EXTS = config.ALLOWED_IMAGE_EXTENSIONS
+ALLOWED_VIDEO_EXTS = config.ALLOWED_VIDEO_EXTENSIONS
+ALLOWED_DOC_EXTS = config.ALLOWED_DOCUMENT_EXTENSIONS
+
+# Audit Logging Path
+AUDIT_LOG_FILE = str(config.LOGS_DIR / "privacy_audit.json")
+

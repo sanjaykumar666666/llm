@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Trust Chat Composer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { background: transparent; color: #F1F5F9; padding: 4px; overflow: hidden; }
+  
+  .composer-wrapper {
+    background: #0F172A;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .composer-wrapper:focus-within {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.18);
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 56px;
+    max-height: 180px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #F8FAFC;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  textarea::placeholder {
+    color: #64748B;
+  }
+
+  /* Live Privacy Panel */
+  .privacy-panel {
+    margin-top: 10px;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    transition: all 0.2s ease-in-out;
+  }
+  .panel-safe {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-left: 4px solid #10B981;
+  }
+  .panel-warn {
+    background: rgba(245, 158, 11, 0.09);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-left: 4px solid #F59E0B;
+  }
+  .panel-block {
+    background: rgba(239, 68, 68, 0.11);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-left: 4px solid #EF4444;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .panel-title {
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+  .title-safe { color: #34D399; }
+  .title-warn { color: #FBBF24; }
+  .title-block { color: #F87171; }
+
+  .panel-score {
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .span-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 6px 0;
+    font-family: monospace;
+    font-size: 12px;
+    word-break: break-all;
+  }
+  mark.mark-warn {
+    background: rgba(245, 158, 11, 0.28);
+    color: #FDE68A;
+    border: 1px solid #F59E0B;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-weight: 600;
+  }
+  mark.mark-block {
+    background: rgba(239, 68, 68, 0.3);
+    color: #FCA5A5;
+    border: 1px solid #EF4444;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-weight: 700;
+  }
+
+  .why-item {
+    margin: 3px 0;
+    font-size: 12px;
+  }
+  .why-safe { color: #34D399; }
+  .why-warn { color: #FDE68A; }
+  .why-block { color: #FCA5A5; }
+
+  .action-tag {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+
+  /* Footer bar */
+  .composer-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .btn-group {
+    display: flex;
+    gap: 8px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .btn-send {
+    background: linear-gradient(135deg, #4F46E5, #6366F1);
+    color: #FFFFFF;
+  }
+  .btn-send:hover {
+    background: linear-gradient(135deg, #4338CA, #4F46E5);
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+  }
+  .btn-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-clear {
+    background: rgba(255, 255, 255, 0.08);
+    color: #94A3B8;
+  }
+  .btn-clear:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #F8FAFC;
+  }
+  .hint-text {
+    font-size: 11px;
+    color: #64748B;
+  }
+</style>
+</head>
+<body>
+
+<div class="composer-wrapper" id="composerCard">
+  <textarea id="promptInput" placeholder="Message AI Trust Chat... (live privacy analysis active)" rows="2"></textarea>
+  
+  <div id="privacyPanel" style="display:none;"></div>
+
+  <div class="composer-footer">
+    <div class="hint-text">Shift + Enter for new line • Enter to send</div>
+    <div class="btn-group">
+      <button type="button" class="btn-clear" id="clearBtn">🧹 Clear</button>
+      <button type="button" class="btn-send" id="sendBtn">🚀 Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Client-side Context-Aware Privacy Engine ────────────────────────────────
+  const SENSITIVE_PATTERNS = [
+    { type: "CREDENTIAL_PASSWORD", regex: /(?:password|passwd|pwd)\s*[:=]\s*['"]?([^\s'",;]{4,})['"]?/i, severity: "CRITICAL", cat: "Password / Credential", desc: "Authentication credential detected" },
+    { type: "CREDENTIAL_PASSWORD", regex: /(?:my|the|our|admin|user|root|account)\s+(?:(?:account\s+)?password|passwd|pwd)\s+is\s+['"]?([A-Za-z0-9@#$%^&*!_+\-=]{4,})['"]?/i, severity: "CRITICAL", cat: "Password / Credential", desc: "Authentication credential detected" },
+    { type: "CREDENTIAL_PASSWORD", regex: /(?:user|username|login)\s+[^\s]+\s+(?:and\s+)?(?:password|passwd)\s+['"]?([A-Za-z0-9@#$%^&*!_+\-=]{4,})['"]?/i, severity: "CRITICAL", cat: "Authentication Credentials (User+Pass)", desc: "Paired username and password credential" },
+    { type: "DB_CONNECTION_STRING", regex: /(?:postgres|postgresql|mysql|mongodb|redis):\/\/[^\s:]+:[^\s@]+@[^\s/:]+(?::\d+)?\/[^\s]+/i, severity: "CRITICAL", cat: "Database Connection URI", desc: "Database connection string with credentials" },
+    { type: "AWS_ACCESS_KEY", regex: /\bAKIA[0-9A-Z]{16}\b/, severity: "CRITICAL", cat: "API Key / Cloud Secret", desc: "Amazon Web Services (AWS) Access Key" },
+    { type: "OPENAI_API_KEY", regex: /\bsk-[a-zA-Z0-9]{32,48}\b/, severity: "CRITICAL", cat: "API Key / Secret", desc: "OpenAI Secret API Key" },
+    { type: "GITHUB_TOKEN", regex: /\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[0-9a-zA-Z_]{30,60}\b/, severity: "CRITICAL", cat: "API Key / Token", desc: "GitHub Personal Access Token" },
+    { type: "JWT_TOKEN", regex: /\beyJ[A-Za-z0-9-_=]+\.eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+\b/, severity: "CRITICAL", cat: "Authentication Token", desc: "JSON Web Token (JWT) secret" },
+    { type: "PRIVATE_KEY", regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/, severity: "CRITICAL", cat: "Private Key", desc: "Cryptographic Private Key block" },
+    { type: "CREDIT_CARD", regex: /\b(?:\d{4}[ -]?){3}\d{4}\b/, severity: "HIGH", cat: "Credit Card Number", desc: "Payment card number" },
+    { type: "GOVERNMENT_SSN", regex: /\b\d{3}-\d{2}-\d{4}\b/, severity: "HIGH", cat: "Government ID (SSN)", desc: "Social Security Number" },
+    { type: "GOVERNMENT_AADHAAR", regex: /\b\d{4}[\s-]\d{4}[\s-]\d{4}\b/, severity: "HIGH", cat: "Government ID (Aadhaar)", desc: "Indian National Aadhaar ID" },
+    { type: "GOVERNMENT_PAN", regex: /\b[A-Z]{5}\d{4}[A-Z]{1}\b/, severity: "HIGH", cat: "Government ID (PAN)", desc: "Indian PAN Card Number" },
+    { type: "EMAIL_ADDRESS", regex: /\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b/i, severity: "MEDIUM", cat: "Email Address", desc: "Personal contact information detected" },
+    { type: "PHONE_NUMBER", regex: /(?<!\d)(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)|\b(?:\+91[\s-]?)?[6-9]\d{9}\b/, severity: "MEDIUM", cat: "Phone Number", desc: "Personal contact information detected" }
+  ];
+
+  const EDUCATIONAL_PATTERNS = [
+    /\bwhat (?:is|are|was|were) (?:a |an |the |your |our )?(?:password|credit card|cvv|ssn|aadhaar|pan card|api key|token)\b/i,
+    /\bhow (?:do|does|to|can) (?:you |we |i |a user )?(?:hash|salt|protect|reset|change|store|generate|encrypt|manage|secure|validate) (?:a |the |your )?(?:password|credit card|api key|token)\b/i,
+    /\bexplain (?:how |what |the concept of |the difference between )?.*(?:password|credit card|cryptography|encryption|hashing|api key|token|salting|2fa)\b/i,
+    /\b(?:password|credit card|api key|identity|fraud|security) (?:manager|policy|protection|generator|hashing|salting|strength|guidelines|prevention|best practices?)\b/i
+  ];
+
+  const CVV_EXP_PATTERNS = [
+    /\b(?:cvv|cvc|security code|cvv2)[\s:=#]*\d{3,4}\b/i,
+    /\b(?:exp|expiration|expires|valid thru)[\s:=]*\d{1,2}[/-]\d{2,4}\b/i
+  ];
+
+  function isEducationalQuery(text) {
+    if (!text) return false;
+    // If text has an explicit credential disclosure or assignment, it's not educational
+    for (const pat of SENSITIVE_PATTERNS) {
+      if (pat.severity === "CRITICAL" && pat.regex.test(text)) {
+        return false;
+      }
+    }
+    return EDUCATIONAL_PATTERNS.some(p => p.test(text));
+  }
+
+  function analyzeText(text) {
+    if (!text || !text.trim()) {
+      return null;
+    }
+
+    const isEdu = isEducationalQuery(text);
+    const hits = [];
+
+    for (const pat of SENSITIVE_PATTERNS) {
+      const match = text.match(pat.regex);
+      if (match) {
+        let val = match[0];
+        let category = pat.cat;
+        let severity = pat.severity;
+        let desc = pat.desc;
+
+        // Check for Card + CVV combination
+        if (pat.type === "CREDIT_CARD") {
+          const hasCvv = CVV_EXP_PATTERNS.some(p => p.test(text));
+          if (hasCvv) {
+            category = "Financial Payment Credentials (Card + CVV/Exp)";
+            severity = "CRITICAL";
+            desc = "Financial payment credential combination detected";
+          }
+        }
+
+        hits.push({
+          type: pat.type,
+          category: category,
+          span: val,
+          startIndex: match.index,
+          endIndex: match.index + val.length,
+          severity: severity,
+          reason: desc
+        });
+      }
+    }
+
+    // If educational with no actual values matched, return safe
+    if (isEdu && hits.length === 0) {
+      return {
+        status: "SAFE",
+        riskScore: 0,
+        riskLevel: "LOW",
+        banner: "🟢 AI TRUST",
+        detected: "None",
+        why: ["✓ No privacy-sensitive information detected.", "✓ Safe educational security discussion."],
+        action: "SAFE TO SEND",
+        where: null,
+        highlightedText: escapeHtml(text)
+      };
+    }
+
+    if (hits.length === 0) {
+      return {
+        status: "SAFE",
+        riskScore: 0,
+        riskLevel: "LOW",
+        banner: "🟢 AI TRUST",
+        detected: "None",
+        why: ["✓ No privacy-sensitive data detected.", "✓ No credentials or financial records found."],
+        action: "SAFE TO SEND",
+        where: null,
+        highlightedText: escapeHtml(text)
+      };
+    }
+
+    // Determine highest severity
+    const hasCritical = hits.some(h => h.severity === "CRITICAL");
+    const hasHigh = hits.some(h => h.severity === "HIGH");
+
+    let status = "SAFE";
+    let riskScore = 0;
+    let riskLevel = "LOW";
+    let banner = "🟢 AI TRUST";
+    let action = "SAFE TO SEND";
+    let whyList = [];
+
+    if (hasCritical) {
+      status = "BLOCK";
+      riskScore = 81;
+      riskLevel = "CRITICAL";
+      banner = "🔴 AI TRUST";
+      action = "BLOCK";
+      for (const h of hits) {
+        if (h.category.includes("Password") || h.category.includes("Authentication")) {
+          whyList.push("• Authentication credential detected.");
+          whyList.push("• Sensitive passwords must not be sent to external LLMs.");
+        } else if (h.category.includes("Financial") || h.category.includes("Card")) {
+          whyList.push("• Financial payment credential combination detected (Card + CVV/Exp).");
+          whyList.push("• High-risk payment data must not be sent to external LLMs.");
+        } else {
+          whyList.push(`• ${h.reason}.`);
+        }
+      }
+    } else if (hasHigh || hits.length > 0) {
+      status = "MEDIUM";
+      riskScore = hits.length > 1 ? 38 : 30;
+      riskLevel = "MEDIUM";
+      banner = "🟡 AI TRUST";
+      action = "SANITIZE";
+      for (const h of hits) {
+        whyList.push(`• ${h.reason} (${h.category}).`);
+      }
+      whyList.push("• Identifiers will be masked before transmission to AI.");
+    }
+
+    whyList = Array.from(new Set(whyList));
+
+    // Format highlighted spans
+    let highlightedText = escapeHtml(text);
+    for (const h of hits) {
+      const cls = h.severity === "CRITICAL" ? "mark-block" : "mark-warn";
+      const escapedSpan = escapeHtml(h.span);
+      highlightedText = highlightedText.replace(escapedSpan, `<mark class="${cls}">${escapedSpan}</mark>`);
+    }
+
+    return {
+      status: status,
+      riskScore: riskScore,
+      riskLevel: riskLevel,
+      banner: banner,
+      detected: hits.map(h => h.category).join(", "),
+      why: whyList,
+      action: action,
+      where: hits[0].span,
+      whereList: hits,
+      highlightedText: highlightedText
+    };
+  }
+
+  function escapeHtml(str) {
+    if (!str) return "";
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ── Streamlit Component Lifecycle ──────────────────────────────────────────
+  const textarea = document.getElementById("promptInput");
+  const privacyPanel = document.getElementById("privacyPanel");
+  const sendBtn = document.getElementById("sendBtn");
+  const clearBtn = document.getElementById("clearBtn");
+
+  function sendToStreamlit(value) {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setComponentValue",
+      value: value
+    }, "*");
+  }
+
+  function updateFrameHeight() {
+    const height = document.getElementById("composerCard").scrollHeight + 16;
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setFrameHeight",
+      height: height
+    }, "*");
+  }
+
+  function renderLiveAnalysis() {
+    const text = textarea.value;
+    const analysis = analyzeText(text);
+
+    if (!analysis) {
+      privacyPanel.style.display = "none";
+      privacyPanel.innerHTML = "";
+      updateFrameHeight();
+      return;
+    }
+
+    privacyPanel.style.display = "block";
+    let panelClass = "panel-safe";
+    let titleClass = "title-safe";
+    let whyClass = "why-safe";
+
+    if (analysis.status === "BLOCK") {
+      panelClass = "panel-block";
+      titleClass = "title-block";
+      whyClass = "why-block";
+    } else if (analysis.status === "MEDIUM") {
+      panelClass = "panel-warn";
+      titleClass = "title-warn";
+      whyClass = "why-warn";
+    }
+
+    let whereHtml = "";
+    if (analysis.whereList && analysis.whereList.length > 0) {
+      whereHtml = `<div style="margin: 6px 0;">
+        <div style="font-size:11px; font-weight:700; color:#94A3B8; text-transform:uppercase; margin-bottom:2px;">WHERE IS THE RISK?</div>
+        <div class="span-box">${analysis.highlightedText}</div>
+        ${analysis.whereList.map(w => `<div style="font-size:11px; color:#CBD5E1;">• Where: <code>${escapeHtml(w.span)}</code> | Type: <strong>${w.category}</strong></div>`).join("")}
+      </div>`;
+    }
+
+    let whyHtml = `<div style="margin-top:4px;">
+      <div style="font-size:11px; font-weight:700; color:#94A3B8; text-transform:uppercase; margin-bottom:2px;">WHY:</div>
+      ${analysis.why.map(w => `<div class="why-item ${whyClass}">${w}</div>`).join("")}
+    </div>`;
+
+    let actionHtml = `<div class="action-tag">
+      <span style="color:#94A3B8;">ACTION: </span>
+      <strong class="${titleClass}">${analysis.action}</strong>
+    </div>`;
+
+    privacyPanel.className = `privacy-panel ${panelClass}`;
+    privacyPanel.innerHTML = `
+      <div class="panel-header">
+        <div>
+          <span class="panel-title ${titleClass}">${analysis.banner}</span> &nbsp;
+          <span class="panel-score ${titleClass}">Risk: ${analysis.riskScore}% (${analysis.status})</span>
+        </div>
+        <div style="font-size:11px; color:#94A3B8;">Detected: <strong style="color:#F1F5F9;">${analysis.detected}</strong></div>
+      </div>
+      ${whereHtml}
+      ${whyHtml}
+      ${actionHtml}
+    `;
+
+    updateFrameHeight();
+  }
+
+  // ── Input Event Handlers ───────────────────────────────────────────────────
+  textarea.addEventListener("input", () => {
+    renderLiveAnalysis();
+  });
+
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      triggerSend();
+    }
+  });
+
+  sendBtn.addEventListener("click", () => {
+    triggerSend();
+  });
+
+  clearBtn.addEventListener("click", () => {
+    textarea.value = "";
+    renderLiveAnalysis();
+    sendToStreamlit({ text: "", action: "clear", timestamp: Date.now() });
+  });
+
+  function triggerSend() {
+    const text = textarea.value.trim();
+    if (!text) return;
+
+    sendToStreamlit({
+      text: text,
+      action: "send",
+      timestamp: Date.now()
+    });
+
+    textarea.value = "";
+    renderLiveAnalysis();
+  }
+
+  // Handle Streamlit incoming data
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "streamlit:render") {
+      const args = event.data.args || {};
+      if (args.initial_text && args.initial_text !== textarea.value) {
+        textarea.value = args.initial_text;
+        renderLiveAnalysis();
+      }
+      updateFrameHeight();
+    }
+  });
+
+  // Signal ready to Streamlit
+  window.parent.postMessage({
+    isStreamlitMessage: true,
+    type: "streamlit:componentReady",
+    apiVersion: 1
+  }, "*");
+
+  // Initial sizing
+  setTimeout(updateFrameHeight, 50);
+</script>
+</body>
+</html>
