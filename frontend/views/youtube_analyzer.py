@@ -746,12 +746,15 @@ def render_youtube_analyzer_view() -> None:
             with c_o1:
                 st.markdown("##### Dual-Model Ensemble Evaluation")
                 st.write("The stream is evaluated concurrently by a semantic DistilBERT Transformer and a Multinomial Naive Bayes classifier.")
-                ov = explainability.get("overview", {})
-                st.info(f"**Model Agreement:** {ov.get('agreement_pct', 94)}% between Neural and Probabilistic models.")
+                agree_val = ov.get('agreement_pct')
+                agree_str = f"{agree_val}%" if agree_val is not None else "N/A"
+                st.info(f"**Model Agreement:** {agree_str} between Neural and Probabilistic models.")
             with c_o2:
                 st.markdown("##### Confidence Metrics")
-                st.metric("DistilBERT [CLS]", f"{ov.get('bert_score', 0.85)*100:.1f}%")
-                st.metric("Naive Bayes", f"{ov.get('nb_score', 0.82)*100:.1f}%")
+                bert_s = ov.get('bert_score')
+                nb_s = ov.get('nb_score')
+                st.metric("DistilBERT [CLS]", f"{bert_s*100:.1f}%" if bert_s is not None else "N/A")
+                st.metric("Naive Bayes", f"{nb_s*100:.1f}%" if nb_s is not None else "N/A")
 
         with tab_lime:
             st.markdown("##### Local Interpretable Model-agnostic Explanations (LIME)")

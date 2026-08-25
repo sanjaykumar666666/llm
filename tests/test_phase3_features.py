@@ -42,7 +42,7 @@ def feature_extractor():
 # ── TEST 1: Text → BERT semantic features generated ──────────────────────────
 
 def test_text_bert_semantic_features(input_handler, preprocessor, feature_extractor):
-    raw_text = "This is a confidential payload containing API keys sk_live_991823."
+    raw_text = "This is a confidential payload containing API keys MOCK_SAMPLE_KEY_991823."
     std_input = input_handler.handle_text(raw_text)
     preprocessed = preprocessor.preprocess(std_input)
 
@@ -137,10 +137,10 @@ def test_youtube_chunk_semantic_features(feature_extractor):
     mock_preprocessed = PreprocessedData(
         input_type="youtube",
         source="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        extracted_text="Welcome to the cloud security briefing. Make sure not to expose API tokens sk_live_123.",
+        extracted_text="Welcome to the cloud security briefing. Make sure not to expose API tokens MOCK_SAMPLE_KEY_123.",
         frames=[
             {"timestamp_sec": 5.0, "timestamp_str": "00:05", "text": "Welcome to the cloud security briefing."},
-            {"timestamp_sec": 15.0, "timestamp_str": "00:15", "text": "Make sure not to expose API tokens sk_live_123."},
+            {"timestamp_sec": 15.0, "timestamp_str": "00:15", "text": "Make sure not to expose API tokens MOCK_SAMPLE_KEY_123."},
         ],
         metadata={"youtube_video_id": "dQw4w9WgXcQ", "has_transcript": True},
         preprocessing_status="success",

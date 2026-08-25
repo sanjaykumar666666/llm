@@ -545,29 +545,20 @@ class APIClient:
     @staticmethod
     def _mock_explainability_response(modality: str = "Text") -> Dict[str, Any]:
         return {
+            "explainability_status": "not_available",
             "modality": modality,
-            "risk_score": 87,
-            "status": "BLOCKED",
-            "risk_level": "HIGH",
-            "detected_risks": [
-                "Personal Information",
-                "Credential Information",
-                "Confidential Content"
-            ],
-            "affected_features": "High weight tokens drove classifier probability above cutoff.",
-            "feature_contributions": [
-                {"rank": "#1", "type": "Supporting", "feature": "Personal Information", "weight": 0.1513, "is_risk": False},
-                {"rank": "#2", "type": "Supporting", "feature": "Phone Number", "weight": 0.1483, "is_risk": False}
-            ],
-            "privacy_breakdown": {
-                "Personal Information": "HIGH",
-                "Credentials": "HIGH"
-            },
-            "detected_entities": ["Personal information", "Phone number"],
-            "recommended_action": "BLOCK INPUT",
-            "why_explanation": "Privacy risk detected in input payload.",
+            "risk_score": None,
+            "status": "UNAVAILABLE",
+            "risk_level": "UNKNOWN",
+            "detected_risks": [],
+            "affected_features": "Explainability analysis unavailable when backend service is offline.",
+            "feature_contributions": [],
+            "privacy_breakdown": {},
+            "detected_entities": [],
+            "recommended_action": "NO ACTION",
+            "why_explanation": "Explainability service is offline or not available.",
             "model_info": {
                 "model": "Hybrid BERT–Naive Bayes",
-                "detection": "Privacy Risk Classification"
+                "detection": "Unavailable"
             }
         }

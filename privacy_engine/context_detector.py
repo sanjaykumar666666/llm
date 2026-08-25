@@ -16,34 +16,78 @@ from typing import List, Dict, Any, Tuple, Optional
 # ── Educational / Conceptual Inquiry Patterns ─────────────────────────────────
 # Queries matching these patterns without explicit value assignments are conceptual/safe.
 _EDUCATIONAL_INQUIRY_PATTERNS = [
-    r'\bwhat (?:is|are|was|were) (?:a |an |the |your |our )?(?:password|passwd|pin|credit card|cvv|cvc|ssn|aadhaar|pan card|api key|jwt|token|secret key|private key|iban)\b',
+    r'\bwhat (?:is|are|was|were) (?:a |an |the |your |our )?(?:strong |good |secure |valid |temp |temporary |random )?(?:password|passwd|pin|credit card|cvv|cvc|ssn|aadhaar|pan card|api key|jwt|token|secret key|private key|iban)\b',
     r'\bhow (?:do|does|to|can) (?:you |we |i |a user )?(?:hash|salt|protect|reset|change|store|generate|encrypt|decrypt|manage|secure|validate|process) (?:a |the |your )?(?:password|passwd|credit card|api key|token|key|credentials?)\b',
     r'\bexplain (?:how |what |the concept of |the difference between )?.*(?:password|credit card|cryptography|encryption|hashing|api key|token|salting|two factor|2fa|oauth|jwt)\b',
     r'\b(?:password|credit card|api key|identity|fraud|security) (?:manager|policy|protection|generator|hashing|salting|strength|guidelines|prevention|mechanisms?|architecture|standards?|best practices?)\b',
     r'\b(?:difference between|compare|pros and cons of) .*(?:password|token|api key|symmetric|asymmetric|public key|private key)\b',
     r'\bdefine (?:a |an |the )?(?:password|credit card|cvv|api key|ssn|aadhaar)\b',
+    # General personal/relationship questions (Educational / Conceptual)
+    r'\bwhat (?:is|are|was|were) (?:common |typical |frequent |major )?(?:causes?|reasons?|signs?|symptoms?|types?|examples?|effects?) of (?:relationship |marriage |marital |family |domestic |personal |workplace )?(?:conflicts?|problems?|disputes?|issues?|stress|burnout|trauma|breakups?|divorce)\b',
+    r'\bhow (?:do|does|to|can) (?:couples|families|people|individuals|partners|therapists|parents|someone) (?:improve|handle|manage|resolve|navigate|deal with|treat|overcome) (?:relationship|marital|family|domestic|personal|communication) (?:conflicts?|problems?|issues?|challenges?|disputes?)\b',
+    r'\b(?:explain|discuss|describe) (?:how |what |the psychology of |the dynamics of )?(?:relationship|family|interpersonal|marriage) (?:counseling|therapy|dynamics|communication|conflicts?)\b',
 ]
+
+# ── Highly Personal Context Patterns & Classifiers ────────────────────────────
+# Three-Level Personal Context Model:
+# 1. SAFE: General inquiries/concepts (handled by educational/general matchers)
+# 2. WARNING: Mild 1st-person disclosure of personal context
+# 3. HIGH RISK: Detailed, identifying, narrative, or multi-party intimate disclosure
+
+# High Risk Deep Disclosure Markers
+_HIGH_PERSONAL_RISK_PATTERNS = [
+    # Detailed relationship history & private multi-party events
+    r'\b(?:tell you|share|describe|explain|detail|confess)\s+(?:everything|all|the whole story|every detail)\s+(?:that happened|about my|in my)\s+(?:\d+[- ](?:year|month)|long-term|past|entire)?\s*(?:relationship|marriage|partnership|divorce)',
+    r'\b(?:private|intimate|secret|confidential)\s+(?:events?|details?|aspects?|conversations?|matters?)\s+involving\s+my\s+(?:partner|spouse|husband|wife|boyfriend|girlfriend|family|parents|in-laws|children|kids|ex|ex-partner)',
+    r'\b(?:details? of my|everything about my)\s+(?:divorce|custody battle|family court|infidelity|affair|marital crisis|domestic dispute)',
+    r'\b(?:my|our)\s+(?:\d+[- ]year|\d+[- ]month|long[- ]term)\s+relationship,\s*(?:including|involving)\s+(?:private|intimate|personal|secret)\s+(?:events?|details?|disputes?)',
+    r'\b(?:intimate|secret|confidential)\s+(?:details?|history)\s+of\s+my\s+(?:family|marriage|relationship|private life|financial crisis)',
+    r'\b(?:secret|private)\s+(?:family dispute|inheritance battle|court case|custody dispute|domestic conflict)\b',
+    r'\b(?:confidential|sensitive)\s+personal\s+(?:experience|trauma|history|story)\s+involving\s+my\b',
+]
+
+# Warning Level Mild Personal Statement Indicators (1st-person disclosure)
+_MILD_PERSONAL_CONTEXT_PATTERNS = [
+    r'\b(?:i have been having|i am having|i had|i am dealing with|i have)\s+(?:problems?|issues?|trouble|struggles?|conflicts?|disagreements?|arguments?)\s+(?:with|in)\s+my\s+(?:relationship|partner|spouse|husband|wife|boyfriend|girlfriend|family|brother|sister|parents|mother|father|friend)\b',
+    r'\b(?:my\s+(?:relationship|marriage|partner|spouse|husband|wife|boyfriend|girlfriend|family|brother|sister|parents))\s+(?:and i\s+)?(?:had an argument|are having problems|broke up|is struggling|had a conflict)\b',
+    r'\b(?:i feel|i am feeling)\s+(?:stressed|upset|anxious|overwhelmed|heartbroken|depressed)\s+(?:about|because of)\s+my\s+(?:relationship|partner|marriage|family|divorce|finances|personal life)\b',
+    r'\b(?:i want to talk about|can we talk about|asking for advice on)\s+my\s+(?:personal|relationship|family|marital|dating)\s+(?:situation|problem|struggle|conflict)\b',
+    r'\b(?:my personal experience with|in my personal life|my private life)\b',
+]
+
 
 # ── Actual Direct Credential Disclosure Patterns ──────────────────────────────
 _CREDENTIAL_DISCLOSURE_PATTERNS: List[Tuple[str, str, str, str]] = [
     # (Entity Type, Pattern, Severity, Description)
     (
         "CREDENTIAL_PASSWORD",
-        r'(?:password|passwd|pwd)\s*[:=]\s*[\'"]?([^\s\'",;]{4,})[\'"]?',
+        r'(?:\b(?:database|db|server|app|application|login|admin|account|root|user|api|client)?\s*(?:password|passwd|pwd))\s*[:=]\s*[\'"]?([^\s\'",;]{3,})[\'"]?',
         "CRITICAL",
         "Direct password assignment detected in configuration or prompt text"
     ),
     (
         "CREDENTIAL_PASSWORD",
-        r'(?:my|the|our|admin|user|root|account)\s+(?:(?:account\s+)?password|passwd|pwd)\s+is\s+[\'"]?([A-Za-z0-9@#$%^&*!_+\-=]{4,})[\'"]?',
+        r'(?:\b(?:my|the|our|admin|user|root|account|db|database|server|app|application|login)?\s*(?:(?:database|db|server|app|application|login|admin|account|root|user)\s+)?(?:password|passwd|pwd)\s+is\s+[\'"]?([^\s\'",;]{3,})[\'"]?)',
         "CRITICAL",
         "Plaintext password disclosure phrase detected"
     ),
     (
         "CREDENTIAL_PASSWORD",
-        r'(?:user|username|login)\s+[^\s]+\s+(?:and\s+)?(?:password|passwd)\s+[\'"]?([A-Za-z0-9@#$%^&*!_+\-=]{4,})[\'"]?',
+        r'(?:user|username|login|uname)\s+[^\s]+\s+(?:and\s+)?(?:password|passwd|pwd)\s+(?:is\s+|[:=]\s*)?[\'"]?([^\s\'",;]{3,})[\'"]?',
         "CRITICAL",
         "Paired username and password credential assignment"
+    ),
+    (
+        "CREDENTIAL_PASSWORD",
+        r'(?:\b(?:my|the|our)?\s*secret\s+(?:i\s+use\s+to\s+(?:log\s*in|access)|for\s+(?:logging\s*in|accessing|my\s+account))\s*(?:to\s+(?:my|the|our)\s+account)?\s*[:=is\s]+[\'"]?([^\s\'",;]{3,})[\'"]?)',
+        "CRITICAL",
+        "Plaintext login secret disclosure phrase detected"
+    ),
+    (
+        "CREDENTIAL_PASSWORD",
+        r'(?:\b(?:deploy\s+credentials|server\s+credentials|login\s+credentials|account\s+credentials)\s*(?:for\s+[^:]+)?\s*[:=is\s]+[\'"]?([^\s\'",;]{3,})[\'"]?)',
+        "CRITICAL",
+        "System deploy / access credentials disclosure phrase detected"
     ),
     (
         "DATABASE_CONNECTION_STRING",
@@ -151,6 +195,24 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         r'\b(?:\d{4}[ -]?){3}\d{4}\b|\b3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}\b',
         "HIGH",
         "Payment card number (Visa, Mastercard, Amex)"
+    ),
+    (
+        "BANK_ACCOUNT_NUMBER",
+        r'\b(?:(?:bank\s+)?account\s*(?:num|no|number)?|bank\s+acc|beneficiary\s+acc(?:ount)?|transfer\s+(?:money\s+|funds\s+)?to\s+(?:bank\s+)?account|payment\s+to\s+(?:bank\s+)?account|IFSC\s+[A-Z]{4}0[A-Z0-9]{6}\s+(?:and\s+)?account)\s*(?:is|to|:|=)?\s*(\d{9,18})\b',
+        "HIGH",
+        "Bank Account Number with contextual indicators"
+    ),
+    (
+        "BANK_ACCOUNT_NUMBER",
+        r'\b(?:my|the|our|beneficiary)\s+(?:bank\s+account|account\s+number|acc\s+no|account)\s+is\s+(\d{9,18})\b',
+        "HIGH",
+        "Direct bank account number disclosure"
+    ),
+    (
+        "BANK_ACCOUNT_NUMBER",
+        r'\b(?:send|transfer|deposit|wire|pay)\s+(?:money\s+|funds\s+)?to\s+(?:bank\s+)?account\s*(?:number|num|no)?\s*[:=]?\s*(\d{9,18})\b',
+        "HIGH",
+        "Bank account funds transfer instruction"
     ),
     (
         "BANK_ROUTING_ACCOUNT",
@@ -265,9 +327,121 @@ class ContextAwareEntityDetector:
                 return True
         return False
 
+    def detect_personal_context(self, text: str) -> Dict[str, Any]:
+
+        """
+        Three-Level Personal Context Model:
+          1. SAFE: General inquiries or conceptual discussion without meaningful personal disclosure.
+          2. WARNING: Mild 1st-person disclosure of personal context without strong reason to block.
+          3. HIGH_RISK: Detailed, identifying, narrative, or multi-party intimate disclosure requiring confirmation.
+        
+        ML Integration Preparation:
+          classification_source = "rule_based_precheck"
+          (Semantic ML classification with BERT + Naive Bayes will be implemented in Pipeline 3).
+        """
+        if not text or not text.strip():
+            return {
+                "detected": False,
+                "level": "SAFE",
+                "category": "SAFE",
+                "classification_source": "rule_based_precheck",
+                "requires_confirmation": False,
+                "reason": "No personal information detected.",
+                "matched_spans": [],
+            }
+
+        # 1. Educational / Conceptual questions without personal disclosure are SAFE
+        if self.is_educational_inquiry(text):
+            return {
+                "detected": False,
+                "level": "SAFE",
+                "category": "SAFE",
+                "classification_source": "rule_based_precheck",
+                "requires_confirmation": False,
+                "reason": "General or educational discussion without personal disclosure.",
+                "matched_spans": [],
+            }
+
+        clean = text.strip()
+        lower = clean.lower()
+
+        # 2. Check for High Privacy Risk patterns (Deep, identifying, multi-party narratives)
+        high_risk_hits = []
+        for pat in _HIGH_PERSONAL_RISK_PATTERNS:
+            for match in re.finditer(pat, clean, re.IGNORECASE):
+                high_risk_hits.append({
+                    "start": match.start(),
+                    "end": match.end(),
+                    "span": match.group(0),
+                })
+
+        # Additional multi-factor check for high personal disclosure:
+        # 1st-person intent + timeframe/depth + multiple private parties/events
+        has_first_person = bool(re.search(r'\b(?:i|my|we|our|me)\b', lower))
+        has_narrative_intent = bool(re.search(r'\b(?:tell you|share with you|explain|talk about|discuss)\s+(?:everything|all|the whole story|every detail|my whole life)\b', lower))
+        has_relationship_terms = bool(re.search(r'\b(?:relationship|marriage|partner|spouse|husband|wife|boyfriend|girlfriend|ex)\b', lower))
+        has_family_terms = bool(re.search(r'\b(?:family|parents|in-laws|mother|father|brother|sister|children|kids)\b', lower))
+        has_private_terms = bool(re.search(r'\b(?:private|intimate|secret|confidential|traumatic|personal)\s+(?:events?|details?|disputes?|history|matters?)\b', lower))
+
+        is_compound_high_risk = (
+            has_first_person and (
+                (has_narrative_intent and (has_relationship_terms or has_family_terms)) or
+                (has_relationship_terms and has_family_terms and (has_private_terms or "private" in lower)) or
+                (has_private_terms and (has_relationship_terms or has_family_terms))
+            )
+        )
+
+        if high_risk_hits or is_compound_high_risk:
+            # Explanation never repeats the user's private content
+            return {
+                "detected": True,
+                "level": "HIGH_RISK",
+                "category": "HIGHLY_PERSONAL_CONTEXT",
+                "classification_source": "rule_based_precheck",
+                "requires_confirmation": True,
+                "reason": "Detailed personal experiences may contain sensitive information.",
+                "matched_spans": high_risk_hits if high_risk_hits else [{"start": 0, "end": len(clean), "span": "[HIGHLY PERSONAL CONTEXT]"}],
+            }
+
+        # 3. Check for Warning Level (Mild personal disclosure)
+        mild_hits = []
+        for pat in _MILD_PERSONAL_CONTEXT_PATTERNS:
+            for match in re.finditer(pat, clean, re.IGNORECASE):
+                mild_hits.append({
+                    "start": match.start(),
+                    "end": match.end(),
+                    "span": match.group(0),
+                })
+
+        # Also check general 1st-person personal context statement
+        if has_first_person and (has_relationship_terms or has_family_terms):
+            is_mild_personal = bool(re.search(r'\b(?:having|had|dealing with|going through|feel|stressed|sad|struggling|argue|argument|problem|issue|conflict|advice)\b', lower))
+            if is_mild_personal or mild_hits:
+                return {
+                    "detected": True,
+                    "level": "WARNING",
+                    "category": "HIGHLY_PERSONAL_CONTEXT",
+                    "classification_source": "rule_based_precheck",
+                    "requires_confirmation": False,
+                    "reason": "Personal context disclosed in message.",
+                    "matched_spans": mild_hits if mild_hits else [{"start": 0, "end": len(clean), "span": "[PERSONAL CONTEXT]"}],
+                }
+
+        # Otherwise SAFE
+        return {
+            "detected": False,
+            "level": "SAFE",
+            "category": "SAFE",
+            "classification_source": "rule_based_precheck",
+            "requires_confirmation": False,
+            "reason": "General discussion without meaningful personal disclosure.",
+            "matched_spans": [],
+        }
+
     def detect_entities(self, text: str) -> List[Dict[str, Any]]:
         """
-        Scans input text for sensitive entities, credentials, and compound identifiers.
+        Scans input text for sensitive entities, credentials, compound identifiers,
+        and personal context disclosures.
         Returns a deduplicated, context-verified list of detected entity objects.
         """
         if not text or not text.strip():
@@ -326,6 +500,7 @@ class ContextAwareEntityDetector:
                         "EMAIL_ADDRESS": "Email Address",
                         "PHONE_NUMBER": "Phone Number",
                         "CREDIT_CARD_NUMBER": "Financial Information (Credit Card)",
+                        "BANK_ACCOUNT_NUMBER": "Financial Information (Bank Account)",
                         "BANK_ROUTING_ACCOUNT": "Financial Bank Account & Routing",
                         "GOVERNMENT_ID_SSN": "Government ID (SSN)",
                         "GOVERNMENT_ID_AADHAAR": "Government ID (Aadhaar)",
@@ -353,10 +528,34 @@ class ContextAwareEntityDetector:
             except re.error:
                 pass
 
+        # 3. Personal Context Detection (if not purely educational)
+        if not is_educational:
+            pers_ctx = self.detect_personal_context(text)
+            if pers_ctx["detected"]:
+                for span_info in pers_ctx.get("matched_spans", []):
+                    start = span_info.get("start", 0)
+                    end = span_info.get("end", len(text))
+                    span_val = text[start:end] if start < len(text) and end <= len(text) else text
+                    raw_hits.append({
+                        "entity_type": "HIGHLY_PERSONAL_CONTEXT" if pers_ctx["level"] == "HIGH_RISK" else "MILD_PERSONAL_CONTEXT",
+                        "category": "Highly Personal Context" if pers_ctx["level"] == "HIGH_RISK" else "Personal Context",
+                        "detected_span": span_val,
+                        "start_index": start,
+                        "end_index": end,
+                        "severity": "HIGH" if pers_ctx["level"] == "HIGH_RISK" else "MEDIUM",
+                        "confidence": 0.92,
+                        "entropy": 0.0,
+                        "reason": pers_ctx["reason"],
+                        "context_type": "PERSONAL_CONTEXT",
+                        "personal_context_level": pers_ctx["level"],
+                        "classification_source": "rule_based_precheck",
+                        "requires_confirmation": pers_ctx["requires_confirmation"],
+                    })
+
         if not raw_hits:
             return []
 
-        # 3. Deduplicate overlapping spans (preserve highest severity & largest span)
+        # 4. Deduplicate overlapping spans (preserve highest severity & largest span)
         raw_hits.sort(key=lambda h: (h["start_index"], -h["end_index"]))
         deduped: List[Dict[str, Any]] = []
         last_end = -1
@@ -373,7 +572,7 @@ class ContextAwareEntityDetector:
                     deduped[-1] = hit
                     last_end = hit["end_index"]
 
-        # 4. Check for Credential Combinations (Compound Elevators)
+        # 5. Check for Credential Combinations (Compound Elevators)
         # Combination A: Credit Card + (CVV or Expiration)
         has_card = any(e["entity_type"] == "CREDIT_CARD_NUMBER" for e in deduped)
         has_cvv_or_exp = any(re.search(pat, text, re.IGNORECASE) for pat in _CVV_EXPIRATION_INDICATORS)
@@ -408,8 +607,9 @@ class ContextAwareEntityDetector:
                     e["category"] = "API Key + Secret Combination"
                     e["reason"] = "API key and client secret credential pair detected"
 
-        # 5. If query was purely educational with no genuine value matches, ensure safety
+        # 6. If query was purely educational with no genuine value matches, ensure safety
         if is_educational and len(deduped) == 0:
             return []
 
         return deduped
+

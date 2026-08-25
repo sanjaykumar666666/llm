@@ -47,6 +47,12 @@ class RiskAssessmentResult:
     risk_breakdown: Dict[str, str] = field(default_factory=dict)
     category_scores: Dict[str, float] = field(default_factory=dict)
 
+    # Personal Context Fields
+    has_personal_context: bool = False
+    personal_context_level: str = "SAFE"        # "SAFE" | "WARNING" | "HIGH_RISK"
+    requires_user_confirmation: bool = False
+    classification_source: str = "rule_based_precheck"
+
     # Component Scores
     ml_hybrid_score: float = 0.0
     entity_severity_score: float = 0.0
@@ -69,6 +75,10 @@ class RiskAssessmentResult:
             "risk_factors": self.risk_factors,
             "risk_breakdown": self.risk_breakdown,
             "category_scores": self.category_scores,
+            "has_personal_context": self.has_personal_context,
+            "personal_context_level": self.personal_context_level,
+            "requires_user_confirmation": self.requires_user_confirmation,
+            "classification_source": self.classification_source,
             "ml_hybrid_score": self.ml_hybrid_score,
             "entity_severity_score": self.entity_severity_score,
             "visual_privacy_score": self.visual_privacy_score,
@@ -126,10 +136,14 @@ class PrivacyRiskScoringEngine:
             cat = d.get("category", "PERSONAL_INFORMATION")
             category_scores[cat] = max(category_scores.get(cat, 0.0), round(weight * 100, 1))
 
-            # Record human-readable risk factor
-            d_type = d.get("type", "SENSITIVE_DATA").replace("_", " ").title()
-            d_masked = d.get("value_masked", "")
-            risk_factors.append(f"{d_type} detected ({d_masked}) [Severity: {sev_str}]")
+            # Record human-readable risk factor (ensure no private content is echoed)
+            d_type = d.get("type", "SENSITIVE_DATA")
+            if "PERSONAL_CONTEXT" in d_type or cat == "HIGHLY_PERSONAL_CONTEXT":
+                risk_factors.append(d.get("reason", "Personal context disclosed in message."))
+            else:
+                d_type_clean = d_type.replace("_", " ").title()
+                d_masked = d.get("value_masked", "")
+                risk_factors.append(f"{d_type_clean} detected ({d_masked}) [Severity: {sev_str}]")
 
         entity_score_pct = round(max_entity_sev * 100.0, 1)
 
@@ -145,19 +159,29 @@ class PrivacyRiskScoringEngine:
         if detections.has_injection:
             risk_factors.append("Adversarial prompt injection sequence identified [Severity: CRITICAL]")
 
-        # ── 4. Unified Synthesis & Rule-Based Override Enforcements ───────────
-        if entity_count == 0 and not detections.has_injection and not detections.has_visual_privacy and ml_score_pct < 25.0:
+        # ── 4. Unified Synthesis & Personal Context Enforcements ──────────────
+        requires_confirmation = False
+        pers_level = getattr(detections, "personal_context_level", "SAFE")
+        has_pers_ctx = getattr(detections, "has_personal_context", False)
+
+        if entity_count == 0 and not detections.has_injection and not detections.has_visual_privacy and ml_score_pct < 65.0:
             final_risk = 0.0
         elif detections.has_critical_secrets or detections.has_injection:
             # Critical secrets or injection force high risk (>= 88%)
             base_score = max(entity_score_pct, injection_score_pct, ml_score_pct)
             final_risk = max(base_score, 88.0)
+        elif has_pers_ctx and pers_level == "HIGH_RISK":
+            # Highly personal context without credentials triggers confirmation
+            final_risk = max(65.0, entity_score_pct)
+            requires_confirmation = True
+        elif has_pers_ctx and pers_level == "WARNING":
+            final_risk = max(35.0, min(55.0, entity_score_pct))
         elif entity_count >= 2:
             # Multiple PII entities elevate risk to HIGH (>= 75%)
             final_risk = max(75.0, entity_score_pct + (entity_count * 3.0))
         elif entity_count == 1:
-            # Single PII entity is MEDIUM risk
-            final_risk = max(45.0, entity_score_pct, ml_score_pct)
+            # Single standard PII entity is MEDIUM risk [45% - 59%]
+            final_risk = max(45.0, min(59.0, entity_score_pct))
         elif detections.has_visual_privacy:
             final_risk = max(55.0, visual_score_pct)
         else:
@@ -199,6 +223,10 @@ class PrivacyRiskScoringEngine:
             risk_factors=risk_factors,
             risk_breakdown=risk_breakdown,
             category_scores=category_scores,
+            has_personal_context=has_pers_ctx,
+            personal_context_level=pers_level,
+            requires_user_confirmation=requires_confirmation,
+            classification_source="evidence_based_risk_engine",
             ml_hybrid_score=ml_score_pct,
             entity_severity_score=entity_score_pct,
             visual_privacy_score=visual_score_pct,
@@ -206,3 +234,4 @@ class PrivacyRiskScoringEngine:
             assessment_status="success",
             assessment_time_ms=elapsed_ms,
         )
+

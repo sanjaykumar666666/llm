@@ -4,10 +4,10 @@ File Location: backend/services/evidence_risk.py
 
 Key Capabilities:
   1. Context-Aware Entity & Span Detection: Distinguishes concepts from actual disclosures.
-  2. Genuine ML Ensemble: DistilBERT [CLS] + PyTorch 3-Class Head & 3-Class Naïve Bayes.
-  3. Continuous Bayesian Risk Calculation: Mathematically defensible scoring without arbitrary offsets.
-  4. Model Disagreement Resolution: Evidence-weighted synthesis with transparent diagnostic logging.
-  5. Compound Credential Elevation: Elevates Card+CVV, User+Pass, Key+Secret to CRITICAL (BLOCK).
+  2. Genuine ML Ensemble: DistilBERT [CLS] + PyTorch Head & Naive Bayes from persistent checkpoints.
+  3. Hybrid Classification: Mathematical fusion P_hybrid(c) = alpha * P_BERT(c) + (1 - alpha) * P_NB(c).
+  4. Continuous Bayesian Risk Calculation: Scientifically defensible risk scoring without arbitrary offsets.
+  5. Critical Credential Protection: Password, API Key, Auth Secret, Prompt Injection are strictly BLOCKED.
   6. Zero-Noise Guarantee: Clean inputs + safe ML produce mathematically 0% risk.
 """
 
@@ -19,12 +19,14 @@ from typing import Dict, Any, List, Optional, Tuple
 from privacy_engine.context_detector import ContextAwareEntityDetector
 from ml_engine.bert_model import BertFeatureExtractor
 from ml_engine.naive_bayes import NaiveBayesPrivacyClassifier
+from ml_engine.hybrid_classifier import HybridPrivacyClassifier
 from privacy_engine.sanitizer import PrivacySanitizer
 
 # ── Module Singletons ─────────────────────────────────────────────────────────
 _detector = None
 _bert = None
 _nb = None
+_hybrid = None
 _sanitizer = None
 
 
@@ -49,6 +51,13 @@ def get_nb() -> NaiveBayesPrivacyClassifier:
     return _nb
 
 
+def get_hybrid() -> HybridPrivacyClassifier:
+    global _hybrid
+    if _hybrid is None:
+        _hybrid = HybridPrivacyClassifier()
+    return _hybrid
+
+
 def get_sanitizer() -> PrivacySanitizer:
     global _sanitizer
     if _sanitizer is None:
@@ -57,14 +66,12 @@ def get_sanitizer() -> PrivacySanitizer:
 
 
 def warmup_models():
-    """Initializes and warms up all models once in memory."""
+    """Initializes all models once in memory."""
     try:
         d = get_detector()
         d.detect_entities("warmup probe")
-        b = get_bert()
-        b.evaluate_privacy_semantics("warmup probe")
-        n = get_nb()
-        n.evaluate_privacy_tokens("warmup probe")
+        h = get_hybrid()
+        h.hybrid_predict("warmup probe")
         s = get_sanitizer()
         s.sanitize_text("warmup@test.org")
     except Exception:
@@ -116,128 +123,278 @@ def generate_highlighted_prompt_html(text: str, entities: List[Dict[str, Any]]) 
     )
 
 
+# Unified 0-100 Risk Level Thresholds
+RISK_LEVEL_THRESHOLDS = {
+    "LOW": (0, 29),
+    "MEDIUM": (30, 59),
+    "HIGH": (60, 79),
+    "CRITICAL": (80, 100),
+}
+
+
+def get_risk_level_from_score(score: int) -> str:
+    """Authoritative mapping from 0-100 integer score to standard risk level."""
+    if score <= 29:
+        return "LOW"
+    elif score <= 59:
+        return "MEDIUM"
+    elif score <= 79:
+        return "HIGH"
+    else:
+        return "CRITICAL"
+
+
 def calculate_evidence_risk(
     text: str,
     bert_result: Dict[str, Any],
     nb_result: Dict[str, Any],
     entities: List[Dict[str, Any]],
     is_educational: bool,
+    hybrid_result: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Calculates evidence-based risk score with scientifically grounded synthesis:
-      1. Base Entity Evidence Score (based on detected spans & severity)
-      2. Context Filter (educational inquiry vs actual disclosure)
-      3. Calibrated ML Ensemble Probabilities & Model Agreement
-      4. Model Disagreement Diagnostics
+    Authoritative Evidence-Based Risk Engine for AI Trust Chat & Tools Ecosystem.
+    Combines deterministic entity detections, critical security rules, personal context policies,
+    and genuine DistilBERT + Naive Bayes hybrid ML probabilities into a single consistent risk score
+    and decision gate.
     """
     bert_risk = bert_result.get("risk_probability", 0.0)
     nb_risk = nb_result.get("risk_probability", 0.0)
-    bert_pred = bert_result.get("predicted_class", "SAFE")
-    nb_pred = nb_result.get("predicted_class", "SAFE")
-    bert_conf = bert_result.get("classification_confidence", 1.0)
-    nb_conf = nb_result.get("classification_confidence", 1.0)
+    bert_pred = bert_result.get("canonical_class", bert_result.get("predicted_class", "SAFE"))
+    nb_pred = nb_result.get("canonical_class", nb_result.get("predicted_class", "SAFE"))
+    bert_conf = bert_result.get("classification_confidence", 0.0)
+    nb_conf = nb_result.get("classification_confidence", 0.0)
 
-    # ── 1. Calculate Entity Severity Baseline ──────────────────────────────────
-    severity_weights = {
-        "CRITICAL": 75,
-        "HIGH": 45,
-        "MEDIUM": 25,
+    if hybrid_result is None:
+        hybrid_classifier = get_hybrid()
+        hybrid_result = hybrid_classifier.hybrid_predict(text)
+
+    hybrid_class = hybrid_result.get("classification", "SAFE")
+    hybrid_conf = hybrid_result.get("confidence", 0.0)
+    p_ml = hybrid_result.get("hybrid_risk_score", 0.60 * bert_risk + 0.40 * nb_risk)
+    ml_status = hybrid_result.get("model_status", "available")
+    agreement = 1.0 - abs(bert_risk - nb_risk)
+
+    # ── 1. Normalize & Bucket Entities (Single-Counting) ──────────────────────
+    risk_factors: List[Dict[str, Any]] = []
+    has_critical = any(e.get("severity") == "CRITICAL" for e in entities)
+    has_pers_high = any(
+        e.get("entity_type") == "HIGHLY_PERSONAL_CONTEXT" or e.get("personal_context_level") == "HIGH_RISK"
+        for e in entities
+    )
+    has_pers_mild = any(
+        e.get("entity_type") == "MILD_PERSONAL_CONTEXT" or e.get("personal_context_level") == "WARNING"
+        for e in entities
+    )
+
+    # Semantic Personal Context Augmentation from ML (Paraphrases without exact keywords)
+    if not is_educational and not (has_pers_high or has_pers_mild):
+        if hybrid_class == "PERSONAL_CONTEXT" and hybrid_conf >= 0.55:
+            if len(text.split()) >= 15 or any(w in text.lower() for w in ["everything", "five-year", "private events", "partner and family", "custody", "infidelity"]):
+                has_pers_high = True
+            else:
+                has_pers_mild = True
+
+    # Severity baseline points mapping
+    severity_baselines = {
+        "CRITICAL": 85,
+        "HIGH": 65,
+        "MEDIUM": 45,
         "LOW": 15,
     }
 
-    entity_points = 0
+    base_score = 0
+    max_severity = "LOW"
+    distinct_categories = set()
+
     if entities:
-        max_sev_pts = max([severity_weights.get(e["severity"], 25) for e in entities])
-        if len(entities) > 1:
-            extra_pts = sum([severity_weights.get(e["severity"], 25) for e in entities]) - max_sev_pts
-            entity_points = min(90, max_sev_pts + int(extra_pts * 0.55))
-        else:
-            entity_points = max_sev_pts
+        for ent in entities:
+            sev = ent.get("severity", "MEDIUM")
+            cat = ent.get("category", "SENSITIVE_DATA")
+            distinct_categories.add(cat)
+            pts = severity_baselines.get(sev, 45)
+            if pts > base_score:
+                base_score = pts
+                max_severity = sev
 
-    # ── 2. ML Ensemble & Agreement ────────────────────────────────────────────
-    p_ml = 0.50 * bert_risk + 0.50 * nb_risk
-    agreement = 1.0 - abs(bert_risk - nb_risk)
+        # Record primary deterministic risk factor
+        risk_factors.append({
+            "category": "CRITICAL_SECURITY" if has_critical else ("PERSONAL_CONTEXT" if (has_pers_high or has_pers_mild) else "PII_DETECTION"),
+            "severity": max_severity,
+            "source": "deterministic_detector",
+            "contribution": base_score,
+            "description": f"Primary detection of {max_severity} severity entity ({len(entities)} entity match(es) across {len(distinct_categories)} category(ies))."
+        })
 
+        # ── 2. Multi-Entity Diversity Adjustment (Non-linear, Bounded) ─────────
+        if len(distinct_categories) > 1 and not has_critical:
+            # Each additional distinct category adds +6 points, capped at +15
+            multi_bonus = min(15, (len(distinct_categories) - 1) * 6)
+            base_score = min(75, base_score + multi_bonus)
+            risk_factors.append({
+                "category": "MULTI_ENTITY_DIVERSITY",
+                "severity": "MEDIUM",
+                "source": "evidence_aggregator",
+                "contribution": multi_bonus,
+                "description": f"Multiple distinct sensitive categories present ({', '.join(distinct_categories)})."
+            })
+
+    elif has_pers_high:
+        base_score = 65
+        max_severity = "HIGH"
+        risk_factors.append({
+            "category": "PERSONAL_CONTEXT",
+            "severity": "HIGH",
+            "source": "hybrid_ml",
+            "contribution": 65,
+            "description": "Detailed personal experiences or intimate disclosures identified via semantic classification."
+        })
+    elif has_pers_mild:
+        base_score = 45
+        max_severity = "MEDIUM"
+        risk_factors.append({
+            "category": "PERSONAL_CONTEXT",
+            "severity": "MEDIUM",
+            "source": "hybrid_ml",
+            "contribution": 45,
+            "description": "Mild personal context or relationship discussion identified via semantic classification."
+        })
+
+    # ── 3. ML Ensemble Corroboration ──────────────────────────────────────────
     ml_adjustment = 0
-    if entity_points > 0:
-        # Scale risk moderately based on ML agreement (-8 to +10 pts)
-        ml_adjustment = int(round(12.0 * (p_ml - 0.50) * (0.5 + 0.5 * agreement)))
-    elif p_ml >= 0.80 and agreement >= 0.75:
-        # Entity-free strong ML agreement on sensitive context
-        ml_adjustment = int(round(35.0 * (p_ml - 0.50)))
+    if ml_status == "available":
+        if base_score > 0 and not has_critical:
+            # Scale risk moderately based on ML agreement (-6 to +8 pts)
+            ml_adjustment = int(round(10.0 * (p_ml - 0.50) * (0.5 + 0.5 * agreement)))
+            if ml_adjustment != 0:
+                risk_factors.append({
+                    "category": "ML_CORROBORATION",
+                    "severity": "LOW",
+                    "source": "hybrid_ml",
+                    "contribution": ml_adjustment,
+                    "description": f"ML hybrid ensemble corroboration (P_risk={p_ml:.2f}, agreement={agreement:.0%})."
+                })
+        elif p_ml >= 0.80 and agreement >= 0.70 and not is_educational and base_score == 0:
+            # Entity-free strong ML agreement on sensitive context
+            ml_adjustment = int(round(35.0 * (p_ml - 0.50)))
+            risk_factors.append({
+                "category": "ML_SEMANTIC_DETECTION",
+                "severity": "MEDIUM",
+                "source": "hybrid_ml",
+                "contribution": ml_adjustment,
+                "description": "High ML semantic probability on sensitive context in entity-free query."
+            })
 
-    # ── 3. Final Risk Score Computation ───────────────────────────────────────
-    if entity_points == 0 and ml_adjustment <= 0:
+    # ── 4. Final Risk Score & Bounds Computation ──────────────────────────────
+    if base_score == 0 and ml_adjustment <= 0:
         risk_score = 0
     else:
-        risk_score = max(0, min(100, entity_points + ml_adjustment))
+        risk_score = max(0, min(100, base_score + ml_adjustment))
 
-    # ── 4. Decision & Risk Level Classification ───────────────────────────────
-    has_critical = any(e["severity"] == "CRITICAL" for e in entities)
-    has_high = any(e["severity"] == "HIGH" for e in entities)
+    # ── 5. Decision Policy & Threshold Mapping ─────────────────────────────────
+    has_standard_pii = any(e.get("category") not in ("Highly Personal Context", "Personal Context") for e in entities)
 
-    if has_critical or risk_score >= 60:
-        risk_score = max(65, risk_score)
-        risk_level = "HIGH" if risk_score < 80 else "CRITICAL"
+    requires_confirmation = False
+    personal_context_level = "SAFE"
+    if has_pers_high:
+        personal_context_level = "HIGH_RISK"
+    elif has_pers_mild:
+        personal_context_level = "WARNING"
+
+    # Deterministic Critical Overrides (CRITICAL / BLOCK)
+    if has_critical:
+        risk_score = max(85, risk_score)
+        risk_level = "CRITICAL"
         decision = "BLOCK"
         status_banner = "🔴 PRIVACY RISK DETECTED"
         action_label = "🚫 BLOCK — Will NOT be sent to external LLM"
-    elif len(entities) > 0 or has_high or 30 <= risk_score < 60:
-        risk_score = max(30, min(59, risk_score))
-        risk_level = "MEDIUM"
+
+    elif has_pers_high:
+        # High personal context (60 - 79 HIGH / WARN + confirmation required)
+        risk_score = max(60, min(79, risk_score if risk_score > 0 else 65))
+        risk_level = "HIGH"
+        decision = "WARN"
+        status_banner = "🔴 HIGHLY PERSONAL INFORMATION DETECTED"
+        action_label = "⚠ HIGH PRIVACY RISK — Explicit Confirmation Required"
+        requires_confirmation = True
+
+    elif has_standard_pii:
+        # Standard PII entities (30 - 59 MEDIUM / WARN with MASK/SANITIZE action)
+        risk_score = max(35, min(75, risk_score))
+        risk_level = get_risk_level_from_score(risk_score)
         decision = "WARN"
         status_banner = "🟡 PRIVACY RISK DETECTED"
         action_label = "🛡️ MASK / SANITIZE before sending to LLM"
+
+    elif has_pers_mild or (30 <= risk_score < 60):
+        # Mild personal context or borderline risk (30 - 59 MEDIUM / WARN)
+        risk_score = max(35, min(59, risk_score))
+        risk_level = "MEDIUM"
+        decision = "WARN"
+        status_banner = "🟡 PERSONAL INFORMATION MAY BE PRESENT"
+        action_label = "🛡️ PRIVACY WARNING — Review before sending"
+
     else:
+        # Safe clean text (0 - 29 LOW / ALLOW)
         risk_score = 0
         risk_level = "LOW"
         decision = "ALLOW"
         status_banner = "🟢 NO PRIVACY RISK"
         action_label = "✓ SAFE TO SEND"
 
-    # ── 5. Evidence & WHERE Items Formulation ─────────────────────────────────
+    # ── 6. Evidence & WHERE Items Formulation (Zero Private Content Leaks) ────
     detected_risks = list(dict.fromkeys([e["category"] for e in entities]))
+    if (has_pers_high or has_pers_mild) and "Personal Context" not in detected_risks and "Highly Personal Context" not in detected_risks:
+        detected_risks.append("Personal Context")
+
     evidence = []
     where_items = []
 
     for ent in entities:
+        is_pers = "Personal Context" in ent.get("category", "")
+        exact_display = "[Personal Details Masked]" if is_pers else ent["detected_span"]
         where_items.append({
             "category": ent["category"],
             "entity_type": ent["entity_type"],
-            "exact_value": ent["detected_span"],
+            "exact_value": exact_display,
             "span": (ent["start_index"], ent["end_index"]),
             "severity": ent["severity"],
             "reason": ent.get("reason", "Sensitive data detected"),
         })
-        evidence.append(
-            f"{ent['category']} detected — {ent['detected_span']} "
-            f"(severity: {ent['severity']}, confidence: {ent.get('confidence', 0.95)*100:.0f}%)"
-        )
+        if is_pers:
+            evidence.append(
+                f"{ent['category']} detected — {ent.get('reason', 'Personal context disclosure')} (severity: {ent['severity']})"
+            )
+        else:
+            evidence.append(
+                f"{ent['category']} detected — {ent['detected_span']} "
+                f"(severity: {ent['severity']}, confidence: {ent.get('confidence', 0.95)*100:.0f}%)"
+            )
 
-    if ml_adjustment != 0:
+    if ml_adjustment != 0 and not (has_pers_high or has_pers_mild):
         sign = "+" if ml_adjustment > 0 else ""
         evidence.append(
             f"ML ensemble corroboration: P(Risk)={p_ml:.2f}, Model Agreement={agreement*100:.0f}% ({sign}{ml_adjustment} pts)"
         )
 
-    # ── 6. Model Disagreement Diagnostics ─────────────────────────────────────
+    # ── 7. Model Disagreement Diagnostics ─────────────────────────────────────
     disagreement_note = None
     if has_critical and (bert_pred == "SAFE" or nb_pred == "SAFE"):
         disagreement_note = (
-            "Model Disagreement: Entity detector identified high-severity credential; "
-            "direct entity evidence prioritized over ML classification."
+            "Model Disagreement: Deterministic entity detector identified critical credential; "
+            "authoritative deterministic rule enforced over ML classification."
         )
         evidence.append(disagreement_note)
-    elif len(entities) == 0 and (bert_pred == "HIGH_RISK" or nb_pred == "HIGH_RISK") and is_educational:
+    elif len(entities) == 0 and (bert_pred != "SAFE" or nb_pred != "SAFE") and is_educational:
         disagreement_note = (
             "Model Disagreement: Lexical inquiry contains security keywords; "
-            "context engine identified safe educational framing."
+            "context engine identified safe educational inquiry framing."
         )
         evidence.append(disagreement_note)
 
-    # ── 7. Bulleted WHY Explanations ──────────────────────────────────────────
+    # ── 8. Bulleted WHY Explanations (Zero User Private Content Echoing) ───────
     why_bullets = []
-    if not entities and risk_score == 0:
+    if not entities and risk_score == 0 and not (has_pers_high or has_pers_mild):
         why_bullets = [
             "✓ No personal information detected",
             "✓ No credentials detected",
@@ -257,12 +414,31 @@ def calculate_evidence_risk(
             elif "API Key" in ent["category"] or "Token" in ent["category"]:
                 why_bullets.append("• Cloud / API secret token detected")
                 why_bullets.append("• Sensitive API keys must not be shared with external LLMs")
+            elif "Prompt Injection" in ent["category"]:
+                why_bullets.append("• Adversarial prompt injection or guardrail override attempt detected")
             else:
                 why_bullets.append(f"• Critical privacy risk: {ent['category']}")
         why_bullets = list(dict.fromkeys(why_bullets))
         cats_str = ", ".join(detected_risks)
-        reason = f"The prompt contains high-risk sensitive information: {cats_str}. This data must not be forwarded to an external LLM."
+        reason = f"The prompt contains high-risk sensitive credentials or security overrides: {cats_str}. This data must not be forwarded to an external LLM."
         routing_action = "BLOCKED → LLM was NOT called"
+    elif has_pers_high:
+        why_bullets = [
+            "• Detailed personal experiences may contain sensitive information",
+            "• User confirmation required before sending to AI",
+            "• AI has not received this message yet",
+            "• You can review and edit your message before continuing",
+        ]
+        reason = "Detailed personal experiences may contain sensitive information."
+        routing_action = "CONFIRMATION REQUIRED → Awaiting user decision"
+    elif has_pers_mild and not has_standard_pii:
+        why_bullets = [
+            "• Personal context disclosed in message",
+            "• Mild personal life details present",
+            "• Safe to send or edit if desired",
+        ]
+        reason = "Personal context disclosed in message."
+        routing_action = "PRIVACY WARNING → User review advised"
     else:
         for ent in entities:
             if "Email" in ent["category"]:
@@ -271,15 +447,49 @@ def calculate_evidence_risk(
                 why_bullets.append("• Personal contact phone number detected")
             elif "Government" in ent["category"]:
                 why_bullets.append("• Sensitive national identity number detected")
+            elif "Personal Context" in ent["category"]:
+                why_bullets.append("• Personal context information detected")
             else:
                 why_bullets.append(f"• {ent['category']} detected")
-        why_bullets.append("• Identifiers will be masked/sanitized before transmission to LLM")
+        if has_standard_pii:
+            why_bullets.append("• Identifiers will be masked/sanitized before transmission to LLM")
         why_bullets = list(dict.fromkeys(why_bullets))
         cats_str = ", ".join(detected_risks)
         reason = f"Sensitive information detected: {cats_str}. The prompt will be sanitized (PII redacted) before being forwarded to the LLM."
         routing_action = "SANITIZE → PII redacted, forwarded to LLM"
 
     highlighted_html = generate_highlighted_prompt_html(text, entities)
+
+    # ── 9. Structured ML Analysis Block ───────────────────────────────────────
+    ml_analysis = {
+        "status": ml_status,
+        "classification": hybrid_result.get("classification", "SAFE"),
+        "canonical_class": hybrid_result.get("canonical_class", "SAFE"),
+        "classification_source": hybrid_result.get("classification_source", "hybrid_ml"),
+        "confidence": hybrid_result.get("confidence", 0.0),
+        "hybrid_risk_score": hybrid_result.get("hybrid_risk_score", 0.0),
+        "alpha_weight": hybrid_result.get("alpha_weight", 0.60),
+        "bert": {
+            "available": bert_result.get("is_transformer_loaded", False),
+            "prediction": bert_result.get("canonical_class", bert_result.get("predicted_class", "UNKNOWN")),
+            "confidence": bert_result.get("classification_confidence", 0.0),
+            "risk_probability": bert_result.get("risk_probability", 0.0),
+        },
+        "naive_bayes": {
+            "available": nb_result.get("is_trained", False),
+            "prediction": nb_result.get("canonical_class", nb_result.get("predicted_class", "UNKNOWN")),
+            "confidence": nb_result.get("classification_confidence", 0.0),
+            "risk_probability": nb_result.get("risk_probability", 0.0),
+        },
+        "hybrid": {
+            "prediction": hybrid_result.get("classification", "SAFE"),
+            "confidence": hybrid_result.get("confidence", 0.0),
+            "risk_score": hybrid_result.get("hybrid_risk_score", 0.0),
+        }
+    }
+
+    # Calculation source indicator
+    calc_src = "evidence_based_risk_engine" if ml_status == "available" else "evidence_based_risk_engine (deterministic_fallback)"
 
     return {
         "risk_score": risk_score,
@@ -295,10 +505,16 @@ def calculate_evidence_risk(
         "where_items": where_items,
         "why_bullets": why_bullets,
         "evidence": evidence,
+        "risk_factors": risk_factors,
         "reason": reason,
         "routing_action": routing_action,
         "highlighted_html": highlighted_html,
         "disagreement_note": disagreement_note,
+        "has_personal_context": has_pers_high or has_pers_mild,
+        "personal_context_level": personal_context_level,
+        "requires_user_confirmation": requires_confirmation,
+        "classification_source": "rule_based_precheck" if entities else hybrid_result.get("classification_source", "hybrid_ml"),
+        "calculation_source": calc_src,
         # Genuine ML outputs
         "bert_score": round(bert_risk, 4),
         "bert_risk_prob": round(bert_risk, 4),
@@ -314,6 +530,7 @@ def calculate_evidence_risk(
         "p_ml": round(p_ml, 4),
         "ml_agreement": round(agreement, 4),
         "has_critical_secret": has_critical,
+        "ml_analysis": ml_analysis,
     }
 
 
@@ -321,35 +538,40 @@ def run_full_analysis(text: str, mode: str = "REDACT") -> Dict[str, Any]:
     """
     End-to-end multi-stage privacy analysis pipeline:
       1. Context-aware entity detection & span extraction
-      2. Genuine DistilBERT 3-class sequence classification
-      3. Calibrated Naïve Bayes 3-class classification
-      4. Continuous Bayesian Evidence-Risk synthesis
-      5. PII sanitization (for ALLOW/WARN)
+      2. Genuine DistilBERT sequence classification
+      3. Calibrated Naive Bayes classification
+      4. Hybrid Mathematical Combination
+      5. Bayesian Evidence-Risk synthesis
+      6. PII sanitization (for ALLOW/WARN)
     """
     if not text or not text.strip():
         detector = get_detector()
         bert = get_bert()
         nb = get_nb()
+        hybrid = get_hybrid()
         return calculate_evidence_risk(
             "",
             bert.evaluate_privacy_semantics(""),
             nb.evaluate_privacy_tokens(""),
             [],
             True,
+            hybrid.hybrid_predict(""),
         )
 
     detector = get_detector()
     bert = get_bert()
     nb = get_nb()
+    hybrid = get_hybrid()
     sanitizer = get_sanitizer()
 
     # 1. Context detection & Entity extraction
     is_educational = detector.is_educational_inquiry(text)
     entities = detector.detect_entities(text)
 
-    # 2. Genuine ML evaluations
+    # 2. Genuine ML evaluations (Single pass)
     bert_result = bert.evaluate_privacy_semantics(text)
     nb_result = nb.evaluate_privacy_tokens(text)
+    hybrid_result = hybrid.hybrid_predict(text)
 
     # 3. Evidence-Risk Calculation
     result = calculate_evidence_risk(
@@ -358,10 +580,12 @@ def run_full_analysis(text: str, mode: str = "REDACT") -> Dict[str, Any]:
         nb_result=nb_result,
         entities=entities,
         is_educational=is_educational,
+        hybrid_result=hybrid_result,
     )
 
-    # 4. Sanitization for non-blocked payloads
-    if result["decision"] in ("WARN", "ALLOW") and entities:
+    # 4. Sanitization for non-blocked payloads with actual standard PII
+    has_standard_pii = any(e.get("category") not in ("Highly Personal Context", "Personal Context") for e in entities)
+    if result["decision"] in ("WARN", "ALLOW", "SANITIZE") and entities and has_standard_pii:
         try:
             san_result = sanitizer.sanitize_text(text, mode=mode)
             result["sanitized_text"] = san_result["sanitized_text"]
@@ -370,15 +594,15 @@ def run_full_analysis(text: str, mode: str = "REDACT") -> Dict[str, Any]:
             result["sanitized_text"] = text
             result["redacted_entities"] = []
     else:
-        result["sanitized_text"] = None
+        result["sanitized_text"] = text if result["decision"] != "BLOCK" else None
         result["redacted_entities"] = []
 
     result["forward_prompt"] = result["sanitized_text"] if result["decision"] != "BLOCK" else None
     result["is_mock"] = False
-    result["engine"] = "evidence_risk_v4_genuine_ml"
+    result["engine"] = "evidence_risk_v5_hybrid_ml"
 
     return result
 
 
-# Initialize and warm up models on module import
+# Initialize models once on import
 warmup_models()

@@ -102,7 +102,7 @@ def test_multiple_pii_high_risk(input_handler, preprocessor, feature_extractor, 
 # ── TEST 4: Critical Secret / API Key → HIGH Risk (>= 85%) ───────────────────
 
 def test_critical_secret_high_risk(input_handler, preprocessor, feature_extractor, detector, hybrid_classifier, risk_engine):
-    text = "Production Deploy: AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE and SECRET_KEY=sk_live_99182374619"
+    text = "Production Deploy: AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE and SECRET_KEY=SG.1234567890abcdefghijkl.abcdefghijklmnopqrstuvwxyz1234567890abcdef"
     std_input = input_handler.handle_text(text)
     preprocessed = preprocessor.preprocess(std_input)
     features = feature_extractor.extract_features(preprocessed)

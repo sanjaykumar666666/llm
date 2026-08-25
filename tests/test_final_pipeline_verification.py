@@ -4,6 +4,9 @@ File: tests/test_final_pipeline_verification.py
 """
 
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from backend.routes.chatbot import chat_endpoint, ChatRequest
 from mcp_engine.web_search_router import WebSearchRouter
 

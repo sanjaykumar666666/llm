@@ -4,7 +4,7 @@ File Location: pipeline/hybrid_classifier.py
 
 Responsibilities:
   1. Combines Phase 3 Feature Extraction (DistilBERT) and Naive Bayes token probabilistic modeling.
-  2. Evaluates contextual risk from BERT [CLS] embeddings.
+  2. Evaluates contextual risk from DistilBERT [CLS] embeddings.
   3. Evaluates token n-gram risk probabilities from Multinomial Naive Bayes.
   4. Computes Shannon entropy signal for cryptographic keys and hashes.
   5. Produces a standardized HybridClassificationResult dataclass.
@@ -19,11 +19,13 @@ from pipeline.feature_extractor import ExtractedFeatures
 from pipeline.preprocessor import PreprocessedData
 from ml_engine.bert_model import BertFeatureExtractor
 from ml_engine.naive_bayes import NaiveBayesPrivacyClassifier
+from ml_engine.hybrid_classifier import HybridPrivacyClassifier
 
 
 # ── Singletons ────────────────────────────────────────────────────────────────
 _bert_instance: Optional[BertFeatureExtractor] = None
 _nb_instance: Optional[NaiveBayesPrivacyClassifier] = None
+_hybrid_instance: Optional[HybridPrivacyClassifier] = None
 
 
 def get_bert() -> BertFeatureExtractor:
@@ -40,6 +42,13 @@ def get_naive_bayes() -> NaiveBayesPrivacyClassifier:
     return _nb_instance
 
 
+def get_hybrid() -> HybridPrivacyClassifier:
+    global _hybrid_instance
+    if _hybrid_instance is None:
+        _hybrid_instance = HybridPrivacyClassifier()
+    return _hybrid_instance
+
+
 @dataclass
 class HybridClassificationResult:
     """
@@ -49,12 +58,14 @@ class HybridClassificationResult:
     input_type: str = "text"
     source: str = "direct_input"
     predicted_class: str = "SAFE"               # "SAFE" | "PII_PRESENT" | "HIGH_RISK"
+    canonical_class: str = "SAFE"
     bert_risk_score: float = 0.0               # 0.0 - 1.0
     nb_risk_probability: float = 0.0           # 0.0 - 1.0
     nb_probabilities: Dict[str, float] = field(default_factory=dict)
     hybrid_probability: float = 0.0            # Weighted probability
     shannon_entropy: float = 0.0               # bits/char
-    classification_confidence: float = 0.95
+    classification_confidence: float = 0.0
+    classification_source: str = "hybrid_ml"
     classification_status: str = "success"
     classification_errors: List[str] = field(default_factory=list)
     classification_time_ms: float = 0.0
@@ -64,12 +75,14 @@ class HybridClassificationResult:
             "input_type": self.input_type,
             "source": self.source,
             "predicted_class": self.predicted_class,
+            "canonical_class": self.canonical_class,
             "bert_risk_score": self.bert_risk_score,
             "nb_risk_probability": self.nb_risk_probability,
             "nb_probabilities": self.nb_probabilities,
             "hybrid_probability": self.hybrid_probability,
             "shannon_entropy": self.shannon_entropy,
             "classification_confidence": self.classification_confidence,
+            "classification_source": self.classification_source,
             "classification_status": self.classification_status,
             "classification_errors": self.classification_errors,
             "classification_time_ms": self.classification_time_ms,
@@ -85,6 +98,7 @@ class HybridClassifier:
     def __init__(self):
         self.bert = get_bert()
         self.nb = get_naive_bayes()
+        self.hybrid = get_hybrid()
 
     @staticmethod
     def _compute_entropy(text: str) -> float:
@@ -120,54 +134,38 @@ class HybridClassifier:
                 input_type=modality,
                 source=source,
                 predicted_class="SAFE",
+                canonical_class="SAFE",
                 bert_risk_score=0.0,
                 nb_risk_probability=0.0,
                 nb_probabilities={"SAFE": 1.0, "PII_PRESENT": 0.0, "HIGH_RISK": 0.0},
                 hybrid_probability=0.0,
                 shannon_entropy=0.0,
                 classification_confidence=1.0,
+                classification_source="hybrid_ml",
                 classification_status="success",
                 classification_time_ms=0.0,
             )
 
         try:
-            # 1. Naive Bayes Evaluation
-            nb_eval = self.nb.evaluate_privacy_tokens(text)
-            nb_prob = nb_eval.get("risk_probability", 0.0)
-            nb_probs = nb_eval.get("probabilities", {})
+            hybrid_pred = self.hybrid.hybrid_predict(text)
+            bert_res = self.bert.evaluate_privacy_semantics(text)
+            nb_res = self.nb.evaluate_privacy_tokens(text)
 
-            # 2. BERT Contextual Risk Evaluation
-            bert_eval = self.bert.evaluate_privacy_semantics(text)
-            bert_score = bert_eval.get("calibrated_risk", bert_eval.get("risk_probability", 0.0))
-
-            # 3. Shannon Entropy
             entropy = self._compute_entropy(text)
-
-            # 4. Weighted Ensemble
-            # 55% BERT Context + 45% Naive Bayes
-            hybrid_prob = round(0.55 * bert_score + 0.45 * nb_prob, 4)
-
-            # Predicted class
-            if hybrid_prob >= 0.75:
-                pred_class = "HIGH_RISK"
-            elif hybrid_prob >= 0.30:
-                pred_class = "PII_PRESENT"
-            else:
-                pred_class = "SAFE"
-
-            conf = max(bert_eval.get("confidence", 0.85), nb_eval.get("classification_confidence", 0.85))
             elapsed_ms = round((time.time() - start_time) * 1000, 2)
 
             return HybridClassificationResult(
                 input_type=modality,
                 source=source,
-                predicted_class=pred_class,
-                bert_risk_score=round(bert_score, 4),
-                nb_risk_probability=round(nb_prob, 4),
-                nb_probabilities=nb_probs,
-                hybrid_probability=hybrid_prob,
+                predicted_class=hybrid_pred.get("predicted_class", "SAFE"),
+                canonical_class=hybrid_pred.get("canonical_class", "SAFE"),
+                bert_risk_score=round(bert_res.get("risk_probability", 0.0), 4),
+                nb_risk_probability=round(nb_res.get("risk_probability", 0.0), 4),
+                nb_probabilities=nb_res.get("three_class_probabilities", {}),
+                hybrid_probability=round(hybrid_pred.get("hybrid_risk_score", 0.0), 4),
                 shannon_entropy=entropy,
-                classification_confidence=round(conf, 4),
+                classification_confidence=round(hybrid_pred.get("confidence", 0.0), 4),
+                classification_source=hybrid_pred.get("classification_source", "hybrid_ml"),
                 classification_status="success",
                 classification_time_ms=elapsed_ms,
             )

@@ -91,6 +91,12 @@ class ProtectionResult:
     original_allowed_downstream: bool = False
     protected_allowed_downstream: bool = False
 
+    # Personal Context Fields
+    has_personal_context: bool = False
+    personal_context_level: str = "SAFE"        # "SAFE" | "WARNING" | "HIGH_RISK"
+    requires_user_confirmation: bool = False
+    classification_source: str = "rule_based_precheck"
+
     # Visual Artifacts
     protected_regions_count: int = 0
     protected_regions: List[Dict[str, Any]] = field(default_factory=list)
@@ -117,6 +123,10 @@ class ProtectionResult:
             "protected_content": self.protected_content,
             "original_allowed_downstream": self.original_allowed_downstream,
             "protected_allowed_downstream": self.protected_allowed_downstream,
+            "has_personal_context": self.has_personal_context,
+            "personal_context_level": self.personal_context_level,
+            "requires_user_confirmation": self.requires_user_confirmation,
+            "classification_source": self.classification_source,
             "protected_regions_count": self.protected_regions_count,
             "protected_regions": self.protected_regions,
             "protected_data_url": self.protected_data_url,
@@ -125,6 +135,7 @@ class ProtectionResult:
             "decision_errors": self.decision_errors,
             "decision_time_ms": self.decision_time_ms,
         }
+
 
 
 class ProtectionAndDecisionEngine:
@@ -288,7 +299,14 @@ class ProtectionAndDecisionEngine:
             orig_file_path = preprocessed.original
 
         # ── Decision Mapping Matrix ────────────────────────────────────────────
-        if has_crit or has_inj or risk_score >= 85.0:
+        requires_confirmation = getattr(risk, "requires_user_confirmation", False)
+        pers_level = getattr(risk, "personal_context_level", "SAFE")
+        has_pers_ctx = getattr(risk, "has_personal_context", False) or getattr(detections, "has_personal_context", False)
+
+        # Check if detections only contain personal context or other PII
+        pii_entities_count = sum(1 for d in detections.detections if d.get("category") not in ("HIGHLY_PERSONAL_CONTEXT",))
+
+        if has_crit or has_inj or (risk_score >= 85.0 and not (has_pers_ctx and not has_crit and not has_inj and pii_entities_count == 0)):
             decision = "BLOCK"
             if has_inj:
                 reason = "Adversarial prompt injection attempt detected. Direct execution blocked."
@@ -299,6 +317,22 @@ class ProtectionAndDecisionEngine:
             protection_method = "NONE"
             orig_allowed = False
             prot_allowed = False
+
+        elif has_pers_ctx and pers_level == "HIGH_RISK":
+            decision = "WARN"
+            reason = "Detailed personal experiences may contain sensitive information. User confirmation required before sending."
+            protection_method = "NONE"
+            orig_allowed = False
+            prot_allowed = True
+            requires_confirmation = True
+
+        elif has_pers_ctx and pers_level == "WARNING" and pii_entities_count == 0:
+            decision = "WARN"
+            reason = "Personal context disclosed in message."
+            protection_method = "NONE"
+            orig_allowed = True
+            prot_allowed = True
+            requires_confirmation = False
 
         elif modality == "image" and (has_visual or det_count > 0):
             decision = "PROTECT"
@@ -354,7 +388,7 @@ class ProtectionAndDecisionEngine:
                 protected_text = self.sanitize_text(raw_text, detections.detections) if raw_text else "[CONTENT BLOCKED]"
                 protection_applied = False
 
-            elif decision == "ALLOW":
+            elif decision in ("ALLOW", "WARN"):
                 protected_text = raw_text
                 protection_applied = False
 
@@ -389,6 +423,10 @@ class ProtectionAndDecisionEngine:
             protected_content=protected_text,
             original_allowed_downstream=orig_allowed,
             protected_allowed_downstream=prot_allowed,
+            has_personal_context=has_pers_ctx,
+            personal_context_level=pers_level,
+            requires_user_confirmation=requires_confirmation,
+            classification_source="rule_based_precheck",
             protected_regions_count=len(protected_regions),
             protected_regions=protected_regions,
             protected_data_url=protected_data_url,
@@ -396,3 +434,4 @@ class ProtectionAndDecisionEngine:
             decision_status="success",
             decision_time_ms=elapsed_ms,
         )
+

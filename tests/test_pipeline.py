@@ -82,7 +82,7 @@ def test_decision_gate():
     assert res_sanitize["decision"] == "SANITIZE"
     assert "[EMAIL_REDACTED]" in res_sanitize["forward_prompt"]
 
-    res_block = gate.evaluate_decision("TOP SECRET API KEY sk_live_99887766554433221100", 0.90)
+    res_block = gate.evaluate_decision("TOP SECRET API KEY AKIAIOSFODNN7EXAMPLE", 0.90)
     assert res_block["decision"] == "BLOCK"
     assert res_block["forward_prompt"] is None
 

@@ -68,7 +68,7 @@ def render_ai_core_view() -> None:
         yt_url = st.text_input("YouTube Video URL:", value="https://www.youtube.com/watch?v=demo_tech_talk")
         if st.button("ANALYZE PRIVACY", use_container_width=True, key="btn_ai_core_yt"):
             res = APIClient.analyze_youtube(yt_url)
-            res["input_text"] = "[08:45] Spoken Transcript: '...do not leak API key sk_live_991823 in public streams...'"
+            res["input_text"] = "[08:45] Spoken Transcript: '...do not leak API key MOCK_KEY_SAMPLE_991823 in public streams...'"
             st.session_state["ai_core_res"] = res
 
     # Analysis Result Section

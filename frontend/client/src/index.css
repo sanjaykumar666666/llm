@@ -442,6 +442,26 @@ body {
   border-bottom-left-radius: 3px;
 }
 
+.message-system {
+  align-self: center;
+  max-width: 90%;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--text-primary);
+  border-radius: 12px;
+  font-size: 0.84rem;
+}
+
+.message-system-error {
+  align-self: center;
+  max-width: 90%;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--text-primary);
+  border-radius: 12px;
+  font-size: 0.84rem;
+}
+
 .input-container {
   padding: 0.85rem 1rem;
   background: var(--bg-card);

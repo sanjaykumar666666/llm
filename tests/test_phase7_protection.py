@@ -167,7 +167,7 @@ def test_high_risk_image_protect(protection_engine):
 # ── TEST 5: Critical credential / API key → BLOCK ────────────────────────────
 
 def test_critical_secret_block(input_handler, preprocessor, feature_extractor, detector, hybrid_classifier, risk_engine, protection_engine):
-    text = "Deployment AWS Key: AKIAIOSFODNN7EXAMPLE Secret: sk_live_99182374619"
+    text = "Deployment AWS Key: AKIAIOSFODNN7EXAMPLE Secret: SG.1234567890abcdefghijkl.abcdefghijklmnopqrstuvwxyz1234567890abcdef"
     std_input = input_handler.handle_text(text)
     preprocessed = preprocessor.preprocess(std_input)
     features = feature_extractor.extract_features(preprocessed)

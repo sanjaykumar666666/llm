@@ -120,37 +120,42 @@ export function PrivacyDashboard({ analysisResult }) {
         
         {detected_entities.length === 0 ? (
           <div style={{ background: 'var(--risk-safe-bg)', border: '1px solid var(--risk-safe-border)', padding: '0.5rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--risk-safe-text)' }}>
-            ✓ No sensitive PII, credentials, or financial account numbers detected.
+            ✓ No sensitive PII, credentials, or personal life disclosures detected.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {detected_entities.map((ent, idx) => (
-              <div 
-                key={idx} 
-                style={{ 
-                  background: 'var(--bg-input)', 
-                  border: '1px solid var(--border-color)',
-                  borderLeft: '3px solid var(--risk-high-text)',
-                  borderRadius: '6px', 
-                  padding: '0.45rem 0.65rem', 
-                  fontSize: '0.78rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: '700', color: 'var(--risk-high-text)' }}>{ent.category}:</span>{' '}
-                  <span>{ent.entity_type}</span>
+            {detected_entities.map((ent, idx) => {
+              const isPersCtx = ent.category === 'Highly Personal Context' || ent.category === 'Personal Context';
+              const borderCol = isPersCtx ? 'var(--accent-primary)' : 'var(--risk-high-text)';
+              return (
+                <div 
+                  key={idx} 
+                  style={{ 
+                    background: 'var(--bg-input)', 
+                    border: '1px solid var(--border-color)',
+                    borderLeft: `3px solid ${borderCol}`,
+                    borderRadius: '6px', 
+                    padding: '0.45rem 0.65rem', 
+                    fontSize: '0.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div>
+                    <span style={{ fontWeight: '700', color: borderCol }}>{ent.category}:</span>{' '}
+                    <span>{ent.entity_type || 'Context Disclosure'}</span>
+                  </div>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    {isPersCtx ? '[Protected Narrative]' : (ent.value_preview || ent.value_masked || '••••')}
+                  </code>
                 </div>
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  {ent.value_preview}
-                </code>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
 
       {/* 4. Sanitized Prompt Preview */}
       <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.75rem' }}>

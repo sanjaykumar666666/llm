@@ -140,6 +140,7 @@ class ChatRequest(BaseModel):
     user_id: Optional[str] = "Employee-001"
     rag_doc_id: Optional[str] = None
     model_preference: Optional[str] = "auto"
+    confirmed_by_user: Optional[bool] = False
 
 
 @router.post("/chat")
@@ -149,7 +150,7 @@ def chat_endpoint(req: ChatRequest):
     1. Input Validation
     2. Fast Query Intent Classification (Router: <1ms)
     3. Evidence-Based Privacy & Injection Scanning (Security: ~40ms)
-    4. Decision Gate (BLOCK -> Halt, WARN -> Mask, ALLOW -> Pass)
+    4. Decision Gate (BLOCK -> Halt, WARN -> Mask, ALLOW -> Pass, CONFIRMATION_REQUIRED -> Await User Action)
     5. Direct Fast LLM or Parallel Web Search (Target: <=2-5s)
     6. Output Scanner & Trust Receipt Generation
     7. High-Resolution Telemetry Profiling (Total, Router, Security, Search, LLM)
@@ -171,7 +172,7 @@ def chat_endpoint(req: ChatRequest):
     # ── STAGE 0: Fast TTL Query Cache Check (<0.1ms) ──────────────────────────
     cache_key = f"{raw_prompt.lower().strip()}||{user_role}||{req.sanitization_mode or 'REDACT'}"
     now_ts = time.time()
-    if cache_key in _CHAT_RESPONSE_CACHE:
+    if cache_key in _CHAT_RESPONSE_CACHE and not req.confirmed_by_user:
         cached_ts, cached_payload = _CHAT_RESPONSE_CACHE[cache_key]
         if (now_ts - cached_ts) < _CHAT_CACHE_TTL:
             cached_resp = dict(cached_payload)
@@ -199,6 +200,9 @@ def chat_endpoint(req: ChatRequest):
     injection_detected, injection_confidence, injection_pattern = _detect_injection(raw_prompt)
 
     # ── STAGE 3: Merge Signals & Calculate Final Decision ──────────────────────
+    has_pers_high = analysis.get("has_personal_context") and analysis.get("personal_context_level") == "HIGH_RISK"
+    requires_confirmation = analysis.get("requires_user_confirmation", False)
+
     if injection_detected:
         risk_score = max(analysis["risk_score"], int(injection_confidence * 95))
         risk_level = "CRITICAL"
@@ -208,6 +212,61 @@ def chat_endpoint(req: ChatRequest):
         reason = f"Adversarial instruction override sequence detected: '{injection_pattern}'. Request blocked from LLM."
         routing_action = "BLOCKED → LLM was not called"
         category = "PROMPT_INJECTION"
+    elif analysis.get("has_critical_secret"):
+        risk_score = analysis["risk_score"]
+        risk_level = analysis["risk_level"]
+        decision = "BLOCK"
+        detected_risks = analysis["detected_risks"]
+        evidence = analysis["evidence"]
+        reason = analysis["reason"]
+        routing_action = analysis["routing_action"]
+        category = "SECRET_DETECTED"
+    elif has_pers_high and not req.confirmed_by_user:
+        # HIGH PERSONAL RISK GATE (Before user confirmation: DO NOT call LLM, DO NOT leak text)
+        risk_score = analysis["risk_score"]
+        risk_level = analysis["risk_level"]
+        decision = "HIGH_PRIVACY_WARNING"
+        detected_risks = analysis["detected_risks"]
+        evidence = analysis["evidence"]
+        reason = analysis["reason"]
+        routing_action = "CONFIRMATION REQUIRED → Awaiting user decision"
+        category = "HIGHLY_PERSONAL_CONTEXT"
+        security_ms = round((time.perf_counter() - t_sec_start) * 1000, 2)
+        total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
+
+        return {
+            "request_id": request_id,
+            "receipt_id": request_id,
+            "decision": "HIGH_PRIVACY_WARNING",
+            "action": "CONFIRMATION_REQUIRED",
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "category": category,
+            "detected_risks": detected_risks,
+            "requires_user_confirmation": True,
+            "personal_context_level": "HIGH_RISK",
+            "classification_source": "rule_based_precheck",
+            "reason": "Detailed personal experiences may contain sensitive information.",
+            "warning_message": "This message may contain highly personal information. Consider removing details that you do not want to share with an AI system.",
+            "trust_indicators": {
+                "privacy_guard_active": True,
+                "ai_has_received": False,
+                "can_review_and_edit": True,
+                "user_decides": True,
+                "status_text": "🔴 Highly personal information detected",
+            },
+            "response": None,
+            "response_text": None,
+            "forward_prompt": None,
+            "timing_breakdown": {
+                "total_ms": total_ms,
+                "router_ms": router_ms,
+                "security_ms": security_ms,
+                "search_ms": 0.0,
+                "llm_ms": 0.0,
+                "render_ms": 1.0,
+            }
+        }
     else:
         risk_score = analysis["risk_score"]
         risk_level = analysis["risk_level"]
@@ -216,7 +275,8 @@ def chat_endpoint(req: ChatRequest):
         evidence = analysis["evidence"]
         reason = analysis["reason"]
         routing_action = analysis["routing_action"]
-        category = "SECRET_DETECTED" if analysis.get("has_critical_secret") else ("PII_DETECTED" if detected_risks else "SAFE")
+        category = "HIGHLY_PERSONAL_CONTEXT" if analysis.get("has_personal_context") else ("PII_DETECTED" if detected_risks else "SAFE")
+
 
     # ── STAGE 4: Policy Evaluation ─────────────────────────────────────────────
     pii_detected = len(analysis["entities"]) > 0
@@ -290,12 +350,15 @@ def chat_endpoint(req: ChatRequest):
             masked_prompt=None,
             rag_meta=None,
             mcp_meta=None,
+            ml_analysis=analysis.get("ml_analysis"),
+            risk_factors=analysis.get("risk_factors", []),
+            calculation_source=analysis.get("calculation_source", "evidence_based_risk_engine"),
         )
         resp_payload["timing_breakdown"] = timing_breakdown
         return resp_payload
 
-    # ── STAGE 6: Sanitization for MEDIUM RISK (WARN / MASK) ───────────────────
-    if decision == "WARN" or pii_detected:
+    # ── STAGE 6: Sanitization for MEDIUM / HIGH RISK (WARN / SANITIZE) ─────────
+    if decision in ("WARN", "SANITIZE") or pii_detected:
         prompt_to_send = analysis.get("sanitized_text") or raw_prompt
         pii_action = "MASK"
     else:
@@ -370,8 +433,18 @@ def chat_endpoint(req: ChatRequest):
         genai_payload = _get_gemini_client().generate_chat_response(messages=messages)
         llm_ms = round((time.perf_counter() - t_llm_start) * 1000, 2)
 
-        if genai_payload.get("status") == "error" or not genai_payload.get("response_text"):
-            response_text = _get_gemini_client()._generate_dynamic_generalized_response(raw_prompt)
+        if not genai_payload.get("success") or not genai_payload.get("response_text"):
+            err_type = genai_payload.get("error_type", "LLM_SERVICE_ERROR")
+            if err_type == "LLM_QUOTA_EXCEEDED":
+                response_text = "⚠️ [AI Service Notice]: The configured Gemini API quota has been exceeded for your project. Please check your plan/quota or retry later."
+            elif err_type == "LLM_AUTH_ERROR":
+                response_text = "⚠️ [AI Service Notice]: Gemini API authentication failed. Please verify the configured API key."
+            elif err_type == "LLM_CONFIGURATION_ERROR":
+                response_text = "⚠️ [AI Service Notice]: Gemini API key is not configured. Please set GEMINI_API_KEY in your environment."
+            elif err_type == "LLM_TIMEOUT":
+                response_text = "⚠️ [AI Service Notice]: The request to Gemini API timed out. Please retry in a moment."
+            else:
+                response_text = f"⚠️ [AI Service Notice]: Upstream LLM generation failed ({err_type}). Please try again later."
         else:
             response_text = genai_payload["response_text"]
 
@@ -461,6 +534,9 @@ def chat_endpoint(req: ChatRequest):
         masked_prompt=analysis.get("sanitized_text") if pii_detected else None,
         rag_meta=rag_meta,
         mcp_meta=mcp_meta,
+        ml_analysis=analysis.get("ml_analysis"),
+        risk_factors=analysis.get("risk_factors", []),
+        calculation_source=analysis.get("calculation_source", "evidence_based_risk_engine"),
     )
     resp_payload["timing_breakdown"] = timing_breakdown
 
@@ -501,6 +577,9 @@ def _build_response_payload(
     masked_prompt: Optional[str],
     rag_meta: Optional[Dict[str, Any]],
     mcp_meta: Optional[Dict[str, Any]],
+    ml_analysis: Optional[Dict[str, Any]] = None,
+    risk_factors: Optional[List[Dict[str, Any]]] = None,
+    calculation_source: Optional[str] = "evidence_based_risk_engine",
 ) -> Dict[str, Any]:
     return {
         "success": True,
@@ -522,6 +601,8 @@ def _build_response_payload(
         "where_items": where_items,
         "why_bullets": why_bullets,
         "evidence": evidence,
+        "risk_factors": risk_factors or [],
+        "calculation_source": calculation_source or "evidence_based_risk_engine",
         "reason": reason,
         "routing_action": routing_action,
         "highlighted_html": highlighted_html,
@@ -533,10 +614,12 @@ def _build_response_payload(
         "nb_prediction": nb_prediction,
         "nb_confidence": nb_confidence,
         "nb_score": nb_confidence,
+        "ml_analysis": ml_analysis or {},
         # Responses & LLM
         "ai_response": response_text,
         "response": response_text,
         "masked_prompt": masked_prompt,
+        "sanitized_prompt": masked_prompt,
         "model_selected": model_info.get("model_label", "Gemini"),
         "model_task_type": model_info.get("task_type", "STANDARD"),
         "model_routing_reason": model_info.get("reasoning", ""),

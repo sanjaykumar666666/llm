@@ -42,13 +42,15 @@ SENSITIVE_PATTERNS = [
 ]
 
 
+from backend.services.evidence_risk import run_full_analysis
+
 @router.post("/privacy/analyze")
 @router.post("/analyze/live")
 def live_typing_analysis_endpoint(req: LiveAnalysisRequest):
     """
     Real-Time Live Typing Privacy Analysis Engine.
-    Executes live pattern matching, risk scoring, sanitization preview, SBERT cosine similarity,
-    and SHAP token attribution as the user types.
+    Authoritative backend privacy evaluation combining context-aware entity detection,
+    DistilBERT semantics, Naive Bayes token probabilities, and continuous risk scoring.
     """
     raw_text = req.text.strip() if req.text else ""
     if not raw_text:
@@ -57,7 +59,7 @@ def live_typing_analysis_endpoint(req: LiveAnalysisRequest):
             "risk_score": 0,
             "risk_level": "SAFE",
             "category": "SAFE",
-            "detected_categories": [],
+            "detected_categories": ["SAFE"],
             "detected_entities": [],
             "sanitized_text": "",
             "decision": "ALLOW",
@@ -66,81 +68,67 @@ def live_typing_analysis_endpoint(req: LiveAnalysisRequest):
             "can_send_to_llm": True,
             "warning_message": None,
             "explanation": "No sensitive information detected in prompt.",
-            "shap": SHAPExplainer.explain_prompt("", 0),
+            "has_personal_context": False,
+            "personal_context_level": "SAFE",
+            "requires_user_confirmation": False,
+            "classification_source": "rule_based_precheck",
+            "trust_indicators": {
+                "privacy_guard_active": True,
+                "ai_has_received": False,
+                "can_review_and_edit": True,
+                "user_decides": True,
+                "status_text": "🛡️ Privacy Guard Active",
+            },
+            "shap": SHAPExplainer.explain_prompt("", 0.0),
             "sbert": sbert_matcher.match_semantic_policy(""),
-            "is_demo_mode": True,
-            "demo_note": "Demo/Mock ML prediction pipeline running in real-time mode for academic evaluation."
+            "is_demo_mode": False
         }
 
-    lower_text = raw_text.lower()
-    detected_entities = []
-    detected_cats_set = set()
-    total_risk_points = 0
-    sanitized_text = raw_text
-
-    # 1. Pattern & Entity Detection
-    for category, entity_type, pattern, placeholder, risk_pts in SENSITIVE_PATTERNS:
-        matches = list(re.finditer(pattern, raw_text, re.IGNORECASE))
-        for m in matches:
-            val = m.group(0)
-            span = [m.start(), m.end()]
-            detected_cats_set.add(category)
-            total_risk_points += risk_pts
-
-            preview = val[:2] + "***" + val[-2:] if len(val) > 4 else "***"
-            detected_entities.append({
-                "category": category,
-                "entity_type": entity_type,
-                "value_preview": preview,
-                "raw_value": val,
-                "span": span,
-                "location": f"Span({span[0]}, {span[1]})"
-            })
-            sanitized_text = sanitized_text.replace(val, placeholder, 1)
-
-    # Keyword backup triggers for high-risk context
-    if "bank account" in lower_text or "account number" in lower_text or re.search(r'\b\d{9,18}\b', raw_text):
-        detected_cats_set.add("Financial Information")
-        total_risk_points += 45
-    if "password" in lower_text or "secret key" in lower_text or "api_key" in lower_text:
-        detected_cats_set.add("Credentials")
-        total_risk_points += 50
-
-    # 2. Risk Score Normalization (0 to 100)
-    risk_score = min(100, max(0, total_risk_points))
-
-    # 3. Categorization & Risk Level
-    if risk_score >= 65:
-        risk_level = "HIGH"
-        decision = "BLOCK"
-        can_send = False
-        warning_msg = "⚠ High Privacy Risk Detected. Prompt blocked due to sensitive information."
-    elif risk_score >= 40:
-        risk_level = "MEDIUM"
-        decision = "WARN"
-        can_send = True
-        warning_msg = "⚠ Privacy Risk Detected. Sanitization recommended before sending."
-    elif risk_score >= 15:
-        risk_level = "LOW"
-        decision = "ALLOW"
-        can_send = True
-        warning_msg = "ℹ Minor privacy signal detected. Safe to send."
-    else:
-        risk_level = "SAFE"
-        decision = "ALLOW"
-        can_send = True
-        warning_msg = None
-
-    detected_categories = list(detected_cats_set) if detected_cats_set else ["SAFE"]
+    evidence = run_full_analysis(raw_text, mode=req.sanitization_mode or "REDACT")
+    
+    risk_score = evidence.get("risk_score", 0)
+    risk_level = evidence.get("risk_level", "SAFE")
+    decision = evidence.get("decision", "ALLOW")
+    action = "BLOCK" if decision == "BLOCK" else ("SANITIZE" if decision == "WARN" else "ALLOW")
+    can_send = decision != "BLOCK"
+    
+    detected_categories = evidence.get("detected_risks") or ["SAFE"]
     primary_category = detected_categories[0] if detected_categories else "SAFE"
+    detected_entities = evidence.get("entities", [])
+    sanitized_text = evidence.get("sanitized_text") or raw_text
 
-    # 4. SHAP & SBERT Computations
+    has_pers_ctx = evidence.get("has_personal_context", False)
+    pers_level = evidence.get("personal_context_level", "SAFE")
+    requires_confirmation = evidence.get("requires_user_confirmation", False)
+
+    warning_msg = None
+    trust_status = "🛡️ Privacy Guard Active"
+
+    if decision == "BLOCK":
+        warning_msg = "⚠ High Privacy Risk Detected. Prompt blocked due to sensitive credentials/secrets."
+        trust_status = "🔴 Highly Sensitive Credentials Detected"
+    elif pers_level == "HIGH_RISK":
+        warning_msg = "This message may contain highly personal information. Consider removing details that you do not want to share with an AI system."
+        trust_status = "🔴 Highly personal information detected"
+    elif pers_level == "WARNING":
+        warning_msg = "Personal information may be present."
+        trust_status = "🟡 Personal information may be present"
+    elif decision == "WARN":
+        warning_msg = "⚠ Privacy Risk Detected. Sanitization recommended before sending."
+        trust_status = "🟡 Privacy Risk Detected"
+    elif risk_score >= 15:
+        warning_msg = "ℹ Minor privacy signal detected. Safe to send."
+        trust_status = "🛡️ Privacy Guard Active"
+
     shap_data = SHAPExplainer.explain_prompt(raw_text, float(risk_score))
     sbert_data = sbert_matcher.match_semantic_policy(raw_text)
 
-    action = "BLOCK" if decision == "BLOCK" else ("SANITIZE" if decision == "WARN" else "ALLOW")
-    confidence = round(0.85 + (risk_score / 1000.0), 2) if risk_score > 0 else 0.98
-    explanation_text = f"{', '.join(detected_categories)} detected in current input requiring privacy protection." if detected_entities else "No sensitive PII or credentials detected."
+    ml_analysis = evidence.get("ml_analysis") or {}
+    confidence = ml_analysis.get("confidence") or (0.98 if risk_score == 0 else 0.90)
+    explanation_text = evidence.get("reason") or (
+        f"{', '.join(detected_categories)} detected in current input requiring privacy protection."
+        if detected_entities else "No sensitive PII or credentials detected."
+    )
 
     return {
         "text": raw_text,
@@ -156,11 +144,30 @@ def live_typing_analysis_endpoint(req: LiveAnalysisRequest):
         "can_send_to_llm": can_send,
         "warning_message": warning_msg,
         "explanation": explanation_text,
+        "has_personal_context": has_pers_ctx,
+        "personal_context_level": pers_level,
+        "requires_user_confirmation": requires_confirmation,
+        "classification_source": evidence.get("classification_source", "rule_based_precheck"),
+        "calculation_source": evidence.get("calculation_source", "evidence_based_risk_engine"),
+        "risk_factors": evidence.get("risk_factors", []),
+        "evidence": evidence.get("evidence", []),
+        "bert_prediction": evidence.get("bert_prediction", "SAFE"),
+        "bert_confidence": evidence.get("bert_confidence", 0.0),
+        "nb_prediction": evidence.get("nb_prediction", "SAFE"),
+        "nb_confidence": evidence.get("nb_confidence", 0.0),
+        "ml_analysis": ml_analysis,
+        "trust_indicators": {
+            "privacy_guard_active": True,
+            "ai_has_received": False,
+            "can_review_and_edit": True,
+            "user_decides": True,
+            "status_text": trust_status,
+        },
         "shap": shap_data,
         "sbert": sbert_data,
-        "is_demo_mode": True,
-        "demo_note": "Demo/Mock ML prediction pipeline running in real-time mode for academic evaluation."
+        "is_demo_mode": False
     }
+
 
 
 @router.post("/privacy/sanitize")

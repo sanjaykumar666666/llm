@@ -48,15 +48,22 @@ CATEGORY_LOCATION = "LOCATION_INFORMATION"
 CATEGORY_BUSINESS = "BUSINESS_CONFIDENTIAL_INFORMATION"
 CATEGORY_VISUAL = "VISUAL_PRIVACY"
 CATEGORY_INJECTION = "PROMPT_INJECTION"
+CATEGORY_PERSONAL_CONTEXT = "HIGHLY_PERSONAL_CONTEXT"
 
 # ── Entity Type → Category Mapping ────────────────────────────────────────────
 ENTITY_CATEGORY_MAP = {
+    # Highly Personal Context
+    "HIGHLY_PERSONAL_CONTEXT": CATEGORY_PERSONAL_CONTEXT,
+    "MILD_PERSONAL_CONTEXT": CATEGORY_PERSONAL_CONTEXT,
+    "PERSONAL_CONTEXT_DISCLOSURE": CATEGORY_PERSONAL_CONTEXT,
+
     # Personal
     "EMAIL_ADDRESS": CATEGORY_PERSONAL,
     "PHONE_NUMBER": CATEGORY_PERSONAL,
     "NAME": CATEGORY_PERSONAL,
     "DATE_OF_BIRTH": CATEGORY_PERSONAL,
     "EMPLOYEE_ID": CATEGORY_PERSONAL,
+
 
     # Identity
     "GOVERNMENT_ID_AADHAAR": CATEGORY_IDENTITY,
@@ -179,6 +186,9 @@ class DetectionResult:
     has_pii: bool = False
     has_injection: bool = False
     has_visual_privacy: bool = False
+    has_personal_context: bool = False
+    personal_context_level: str = "SAFE"        # "SAFE" | "WARNING" | "HIGH_RISK"
+    classification_source: str = "rule_based_precheck"
 
     # Status
     detection_status: str = "success"           # "success" | "error"
@@ -197,10 +207,14 @@ class DetectionResult:
             "has_pii": self.has_pii,
             "has_injection": self.has_injection,
             "has_visual_privacy": self.has_visual_privacy,
+            "has_personal_context": self.has_personal_context,
+            "personal_context_level": self.personal_context_level,
+            "classification_source": self.classification_source,
             "detection_status": self.detection_status,
             "detection_errors": self.detection_errors,
             "detection_time_ms": self.detection_time_ms,
         }
+
 
 
 class PrivacyDetectionEngine:
@@ -464,6 +478,8 @@ class PrivacyDetectionEngine:
             has_pii = False
             has_injection = False
             has_visual = False
+            has_pers_ctx = False
+            pers_level = "SAFE"
 
             for d in all_detections:
                 cat = d.get("category", CATEGORY_PERSONAL)
@@ -478,6 +494,12 @@ class PrivacyDetectionEngine:
                     has_injection = True
                 if cat == CATEGORY_VISUAL:
                     has_visual = True
+                if cat == CATEGORY_PERSONAL_CONTEXT or "PERSONAL_CONTEXT" in d.get("type", ""):
+                    has_pers_ctx = True
+                    if d.get("personal_context_level") == "HIGH_RISK" or sev == "HIGH":
+                        pers_level = "HIGH_RISK"
+                    elif pers_level != "HIGH_RISK":
+                        pers_level = "WARNING"
 
             elapsed_ms = round((time.time() - start_time) * 1000, 2)
 
@@ -491,9 +513,13 @@ class PrivacyDetectionEngine:
                 has_pii=has_pii,
                 has_injection=has_injection,
                 has_visual_privacy=has_visual,
+                has_personal_context=has_pers_ctx,
+                personal_context_level=pers_level,
+                classification_source="rule_based_precheck",
                 detection_status="success",
                 detection_time_ms=elapsed_ms,
             )
+
 
         except Exception as e:
             return DetectionResult(
