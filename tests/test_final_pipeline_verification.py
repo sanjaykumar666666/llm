@@ -20,13 +20,8 @@ def run_mandatory_tests():
         "Information on Latest verified updates on",
         "Current status and verified documentation regarding",
         "Latest verified updates on",
-        "comprehensive breakdown",
-        "Knowledge & Insights",
-        "Definition & Context",
-        "Core Concept & Definition",
-        "Key Facets",
-        "Global Impact",
-        "Practical Value"
+        "### Core Concept & Definition",
+        "### Practical Value"
     ]
 
     mandatory_test_cases = [

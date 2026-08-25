@@ -79,14 +79,16 @@ def _init_chat_session():
 
 def _compute_live_privacy_status(text: str) -> Dict[str, Any]:
     """
-    Computes real-time privacy risk, detected PII entities, and policy decision
-    before the user sends a message.
+    Computes real-time authoritative privacy risk, detected entities, and policy decision
+    before the user sends a message, using Pipelines 1, 3, 4, 5.
     """
     if not text or not text.strip():
         return {
             "risk_score": 0,
             "risk_level": "LOW",
             "decision": "ALLOW",
+            "state_label": "🟢 SAFE",
+            "state_type": "SAFE",
             "entities_label": "None (Clean)",
             "status_col": "#10B981",
             "badge_bg": "rgba(16,185,129,0.12)",
@@ -94,75 +96,65 @@ def _compute_live_privacy_status(text: str) -> Dict[str, Any]:
             "badge_border": "rgba(16,185,129,0.35)",
             "detected_list": [],
             "reason": "Input is clean and contains no sensitive entities.",
-            "entities": []
+            "entities": [],
+            "sanitized_text": "",
+            "is_blocked": False,
         }
 
-    # 1. Regex PII & Entropy
-    tp = TextProcessor()
-    proc = tp.process(text)
-    entities = proc.get("detected_entities", [])
-    entity_types = proc.get("detected_entity_types", [])
+    from backend.services.evidence_risk import run_full_analysis
+    analysis = run_full_analysis(text)
 
-    # 2. Injection Check
-    is_inj, inj_conf, inj_pattern = _detect_injection(text)
-    if is_inj:
-        entity_types.append("PROMPT_INJECTION")
+    decision = analysis["decision"]
+    risk_score = analysis["risk_score"]
+    risk_level = analysis["risk_level"]
+    entities = analysis.get("entities", [])
+    entity_types = [e.get("category", e.get("entity_type", "PII")) for e in entities]
+    sanitized_text = analysis.get("sanitized_text", text)
 
-    # 3. Calculate Risk Score & Decision
-    if is_inj:
-        risk_score = int(round(inj_conf * 100))
-        risk_level = "CRITICAL"
-        decision = "BLOCK"
-        reason = f"Adversarial prompt injection pattern detected ('{inj_pattern}')."
-    elif any(e.get("severity", 0) >= 0.90 for e in entities):
-        risk_score = 92
-        risk_level = "CRITICAL"
-        decision = "BLOCK"
-        reason = f"High-risk confidential secret / credential detected: {', '.join(entity_types)}."
-    elif entities:
-        max_sev = max(e.get("severity", 0.5) for e in entities)
-        risk_score = int(round(max_sev * 100))
-        risk_level = "HIGH" if risk_score >= 70 else "MEDIUM"
-        decision = "SANITIZE"
-        reason = f"Personal identifiable information (PII) detected ({', '.join(entity_types)}) — will be sanitized before LLM transmission."
-    else:
-        risk_score = 0
-        risk_level = "LOW"
-        decision = "ALLOW"
-        reason = "Input is clean and safe for processing."
-
-    # Visual tokens
+    # ── Three Authoritative Live States ───────────────────────────────────────
     if decision == "BLOCK":
+        state_type = "DANGER"
+        state_label = "🔴 DANGER"
         status_col = "#EF4444"
-        badge_bg = "rgba(239,68,68,0.15)"
+        badge_bg = "rgba(239,68,68,0.18)"
         badge_col = "#EF4444"
-        badge_border = "rgba(239,68,68,0.4)"
-    elif decision == "SANITIZE":
+        badge_border = "rgba(239,68,68,0.5)"
+        is_blocked = True
+    elif decision in ("WARN", "SANITIZE") or risk_level in ("MEDIUM", "HIGH"):
+        state_type = "WARNING"
+        state_label = "🟡 WARNING"
         status_col = "#F59E0B"
-        badge_bg = "rgba(245,158,11,0.15)"
+        badge_bg = "rgba(245,158,11,0.18)"
         badge_col = "#F59E0B"
-        badge_border = "rgba(245,158,11,0.4)"
+        badge_border = "rgba(245,158,11,0.5)"
+        is_blocked = False
     else:
+        state_type = "SAFE"
+        state_label = "🟢 SAFE"
         status_col = "#10B981"
-        badge_bg = "rgba(16,185,129,0.15)"
+        badge_bg = "rgba(16,185,129,0.18)"
         badge_col = "#10B981"
-        badge_border = "rgba(16,185,129,0.4)"
+        badge_border = "rgba(16,185,129,0.5)"
+        is_blocked = False
 
-    entities_label = ", ".join(entity_types) if entity_types else "None (Clean)"
+    entities_label = ", ".join(list(dict.fromkeys(entity_types))) if entity_types else "None (Clean)"
 
     return {
         "risk_score": risk_score,
         "risk_level": risk_level,
         "decision": decision,
+        "state_label": state_label,
+        "state_type": state_type,
         "entities_label": entities_label,
         "status_col": status_col,
         "badge_bg": badge_bg,
         "badge_col": badge_col,
         "badge_border": badge_border,
         "detected_list": entity_types,
-        "reason": reason,
+        "reason": analysis.get("reason", "Analysis complete."),
         "entities": entities,
-        "entropy": proc.get("shannon_entropy", 0.0),
+        "sanitized_text": sanitized_text,
+        "is_blocked": is_blocked,
     }
 
 
@@ -529,20 +521,53 @@ def render_chatbot_view():
     st.divider()
 
     # ── SECURE CHATGPT-STYLE MESSAGE COMPOSER & PRIVACY SCANNER ───────────────
-    # Read preset text if any (e.g. from test chips or dashboard)
     current_preset = st.session_state.get("composer_preset_text", "")
 
-    # Compute live privacy analysis for the current text
+    # Compute live authoritative privacy analysis for the current text
     scan_info = _compute_live_privacy_status(current_preset)
+    curr_state = scan_info["state_type"]
+    prev_state = st.session_state.get("last_privacy_state", "SAFE")
+    st.session_state["last_privacy_state"] = curr_state
 
-    # 1. Real-time Live Security Status Strip
+    # 1. Danger Sound Generator (Web Audio API Synthesizer - plays once upon entering DANGER)
+    if curr_state == "DANGER" and prev_state != "DANGER":
+        st.markdown(
+            """
+            <script>
+            (function() {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        const ctx = new AudioContext();
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(880, ctx.currentTime);
+                        osc.frequency.setValueAtTime(440, ctx.currentTime + 0.12);
+                        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start();
+                        osc.stop(ctx.currentTime + 0.3);
+                    }
+                } catch (e) {
+                    console.log("Audio alert blocked by browser autoplay policy.");
+                }
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # 2. Real-time Live Security Status Strip
     st.markdown(
         f"""
         <div style="background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.25); border-radius:12px; padding:10px 16px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
             <div style="display:flex; align-items:center; gap:10px; font-size:12.5px; flex-wrap:wrap;">
                 <span style="color:#38BDF8; font-weight:800; display:flex; align-items:center; gap:4px;">🛡️ AI TRUST</span>
                 <span style="color:#64748B;">|</span>
-                <span style="color:{scan_info['status_col']}; font-weight:700;">Risk: {scan_info['risk_score']}% ({scan_info['risk_level']})</span>
+                <span style="color:{scan_info['status_col']}; font-weight:700;">{scan_info['state_label']} (Risk: {scan_info['risk_score']}%)</span>
                 <span style="color:#64748B;">|</span>
                 <span style="color:#CBD5E1;">Detected: <strong style="color:#F1F5F9;">{scan_info['entities_label']}</strong></span>
             </div>
@@ -554,7 +579,47 @@ def render_chatbot_view():
         unsafe_allow_html=True,
     )
 
-    # 2. Main Secure Composer Form & Action Bar
+    # 3. Live Sanitization Preview Card (When PII is present and masked)
+    if scan_info["state_type"] == "WARNING" and scan_info.get("sanitized_text") and scan_info["sanitized_text"] != current_preset:
+        st.markdown(
+            f"""
+            <div style="background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:10px; padding:10px 14px; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+                    <span style="color:#FDE68A; font-weight:800; font-size:11.5px; display:flex; align-items:center; gap:6px;">🔒 LIVE SANITIZATION PREVIEW</span>
+                    <span style="background:rgba(56,189,248,0.15); color:#38BDF8; border:1px solid rgba(56,189,248,0.3); font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px;">Sent to AI (masked)</span>
+                </div>
+                <div style="color:#E2E8F0; font-size:12px; font-family:monospace; background:rgba(0,0,0,0.35); padding:6px 10px; border-radius:6px;">
+                    {html.escape(scan_info['sanitized_text'])}
+                </div>
+                <div style="color:#94A3B8; font-size:11px; margin-top:4px;">
+                    🛡️ Raw sensitive entities are automatically redacted before reaching external LLMs.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # 4. Live Visual Masking / Blur Protection on DANGER
+    if scan_info["state_type"] == "DANGER":
+        st.markdown(
+            """
+            <div style="background:rgba(220,38,38,0.12); border:1px solid rgba(239,68,68,0.45); border-radius:10px; padding:10px 14px; margin-bottom:8px;">
+                <div style="color:#FCA5A5; font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px;">
+                    <span>🚨 SHIELDED INPUT PROTECTED</span>
+                    <span style="background:rgba(220,38,38,0.3); color:#EF4444; font-size:10.5px; padding:2px 6px; border-radius:6px;">DANGER</span>
+                </div>
+                <div style="filter:blur(4px); color:#F8FAFC; user-select:none; font-family:monospace; margin:6px 0; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:6px;">
+                    [CRITICAL SENSITIVE CREDENTIAL / INJECTION SHIELDED]
+                </div>
+                <div style="color:#EF4444; font-size:11.5px; font-weight:700;">
+                    🚫 Message Blocked — High-risk credentials or adversarial injections are strictly prevented from reaching external LLMs or tools.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # 5. Main Secure Composer Form & Action Bar
     with st.container():
         # Large message input area
         user_prompt = st.text_area(
@@ -590,27 +655,56 @@ def render_chatbot_view():
                 st.rerun()
 
         with c_send:
-            send_clicked = st.button("➤ Send", key="btn_chat_send", type="primary", use_container_width=True)
+            send_btn_label = "🚫 Blocked" if scan_info["is_blocked"] else "➤ Send"
+            send_clicked = st.button(
+                send_btn_label,
+                key="btn_chat_send",
+                type="secondary" if scan_info["is_blocked"] else "primary",
+                use_container_width=True
+            )
 
-    # 3. Optional Pre-flight Scan Detailed Inspection
+    # 6. Optional Pre-flight Scan Detailed Inspection
     if scan_clicked and user_prompt and user_prompt.strip():
         detailed_scan = _compute_live_privacy_status(user_prompt)
         with st.expander("🛡️ Pre-Flight Privacy & Security Diagnostic", expanded=True):
             sc1, sc2, sc3 = st.columns(3)
             sc1.metric("Risk Score", f"{detailed_scan['risk_score']}%", detailed_scan['risk_level'])
             sc2.metric("Policy Action", detailed_scan['decision'])
-            sc3.metric("Shannon Entropy", f"{detailed_scan.get('entropy', 0.0):.2f} bits")
+            sc3.metric("Live State", detailed_scan['state_label'])
             st.markdown(f"**Diagnostic Summary:** {detailed_scan['reason']}")
             if detailed_scan.get("entities"):
                 st.markdown("**Detected Entity Spans:**")
                 for e in detailed_scan["entities"]:
-                    st.write(f"- `{e['entity_type']}`: `{e['value']}` (Severity: {e['severity']})")
+                    st.write(f"- `{e.get('category', e.get('entity_type'))}`: `{e.get('value', '[MASKED]')}` (Severity: {e.get('severity')})")
 
-    # 4. Handle Send Action
+    # 7. Handle Send Action
     if send_clicked:
         prompt = (user_prompt or "").strip()
         if not prompt:
             st.warning("⚠️ Please type a secure message before sending.")
+        elif scan_info["is_blocked"]:
+            st.error("⛔ REQUEST BLOCKED: Input contains high-risk credentials or adversarial overrides. Execution halted with 0 external LLM/tool calls.")
+            # Clear preset text and record blocked turn
+            st.session_state["composer_preset_text"] = ""
+            messages.append({"role": "user", "text": prompt, "tool_used": active_tool_name})
+            messages.append({
+                "role": "assistant",
+                "text": "",
+                "security_meta": {
+                    "decision": "BLOCK",
+                    "risk_score": scan_info["risk_score"],
+                    "risk_level": "CRITICAL",
+                    "category": "CRITICAL_SECURITY",
+                    "detected_risks": scan_info["detected_list"],
+                    "detected_entities": scan_info["entities"],
+                    "reason": scan_info["reason"],
+                    "routing_action": "BLOCKED → LLM was not called",
+                    "model_selected": "Blocked (No Provider)",
+                    "timing_breakdown": {"total_ms": 1.0, "router_ms": 0.0, "security_ms": 1.0, "search_ms": 0.0, "llm_ms": 0.0, "tier": "BLOCKED"},
+                    "timing_ms": 1.0,
+                }
+            })
+            st.rerun()
         else:
             # Clear preset text so it won't duplicate on next turn
             st.session_state["composer_preset_text"] = ""

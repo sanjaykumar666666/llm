@@ -402,22 +402,36 @@ def chat_endpoint(req: ChatRequest):
     # Only invoke search if WebSearchRouter categorized as WEB_REQUIRED / COMPLEX_RESEARCH
     if not rag_context and req.mcp_enabled and routing_intent["should_search"]:
         t_search_start = time.perf_counter()
-        search_out = search_web(routing_intent["search_query"], max_results=routing_intent.get("max_sources", 3))
+        from mcp_engine.tool_security_gateway import secure_tool_call
+        tool_res = secure_tool_call(
+            tool_name="search_web",
+            arguments={
+                "query": routing_intent["search_query"],
+                "max_results": routing_intent.get("max_sources", 3),
+            },
+            user_context={"confirmed_by_user": req.confirmed_by_user}
+        )
         search_ms = round((time.perf_counter() - t_search_start) * 1000, 2)
-        sources_list = search_out.get("sources", [])
-        response_text = search_out.get("direct_answer", "")
 
-        # Append verified sources list below the answer
-        if sources_list and "### Sources" not in response_text:
-            source_links = "\n".join([f"[{s['citation_id']}] [{s['title']}]({s['url']}) — `{s['domain']}`" for s in sources_list])
-            response_text += f"\n\n### Sources\n{source_links}"
+        if tool_res.get("status") == "BLOCKED":
+            response_text = f"🔒 **TOOL EXECUTION BLOCKED**\n\n{tool_res.get('reason', 'Tool call blocked by security policy.')}"
+        else:
+            sources_list = tool_res.get("sources", [])
+            response_text = tool_res.get("direct_answer", "")
+
+            # Append verified sources list below the answer
+            if sources_list and "### Sources" not in response_text:
+                source_links = "\n".join([f"[{s['citation_id']}] [{s['title']}]({s['url']}) — `{s['domain']}`" for s in sources_list])
+                response_text += f"\n\n### Sources\n{source_links}"
 
         mcp_meta = {
             "tool_name": "search_web",
-            "status": "SUCCESS",
+            "status": tool_res.get("status", "SUCCESS"),
             "sources_count": len(sources_list),
             "sources": sources_list,
-            "timing_ms": search_out.get("timing_ms", {})
+            "security_status": tool_res.get("security_status", "untrusted_data"),
+            "trusted_as_instruction": False,
+            "timing_ms": tool_res.get("timing_ms", search_ms)
         }
 
     # FAST DIRECT LLM GENERATION for SIMPLE queries (No web search)
@@ -531,7 +545,7 @@ def chat_endpoint(req: ChatRequest):
         pii_action=pii_action,
         output_action=output_action,
         output_sensitive=output_sensitive,
-        masked_prompt=analysis.get("sanitized_text") if pii_detected else None,
+        masked_prompt=analysis.get("sanitized_text") if (pii_detected or decision in ("WARN", "SANITIZE")) else None,
         rag_meta=rag_meta,
         mcp_meta=mcp_meta,
         ml_analysis=analysis.get("ml_analysis"),

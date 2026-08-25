@@ -133,7 +133,7 @@ _CREDENTIAL_DISCLOSURE_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "PROMPT_INJECTION_OVERRIDE",
-        r'(?:ignore\s+(?:all\s+)?(?:previous\s+)?(?:system\s+|your\s+)?(?:instructions|safety\s+guidelines)|disregard\s+(?:all\s+)?(?:safety\s+)?guardrails|system\s+override[:\s]|developer\s+mode\s+dan|output\s+the\s+entire\s+system\s+prompt|repeat\s+all\s+instructions\s+above|you\s+are\s+an\s+unfiltered\s+ai|act\s+as\s+evil_ai|print\s+your\s+initial\s+instructions|dump\s+environment\s+variables|reveal\s+(?:the\s+)?(?:secret\s+)?system\s+prompt)',
+        r'(?:(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+)?(?:your\s+)?(?:previous\s+)?(?:system\s+|safety\s+)?(?:instructions|rules|guidelines|guardrails|constraints)|(?:print|output|reveal|leak|exfiltrate|show|dump|repeat)\s+(?:all\s+|the\s+)?(?:initial\s+|previous\s+|entire\s+|secret\s+)?(?:system\s+)?(?:prompt|instructions|rules|directives)(?:\s+verbatim)?|system\s*prompt\s*(?:exfiltration|leak|dump|reveal)|print\s+everything\s+above\s+this\s+line|(?:system[:\s]+)?system\s+override[:\s.]|you\s+are\s+now\s+(?:an\s+|in\s+)?(?:unfiltered\s+ai|developer\s+mode|dan|evil_ai)|developer\s+mode\s+dan|act\s+as\s+(?:an\s+)?evil_ai|dump\s+environment\s+variables)',
         "CRITICAL",
         "Adversarial Prompt Injection & Guardrail Override Attempt"
     ),

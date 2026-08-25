@@ -630,4 +630,119 @@ Where:
 * **Full Multi-Pipeline Regression Suite (Pipelines 1, 2, 3, 4):** **183/183 Passed** (100%).
 * **Mandatory Architecture & Routing Suite (`tests/test_final_pipeline_verification.py`):** **8/8 Passed** (100%).
 
+---
+
+## 28. Pipeline 5 Implementation — Privacy Sanitization & Safe Transformation
+
+### 1. Architectural Overview & Single Authoritative Path
+* **Authoritative Sanitizer:** Consolidated all text transformation and redaction into [`privacy_engine/sanitizer.py`](file:///c:/Users/sanja/Downloads/LLM/privacy_engine/sanitizer.py) (`PrivacySanitizer`).
+* **Position-Safe Character Interval Merging:**
+  - Raw matches are collected across all entity pattern definitions.
+  - Overlapping and adjacent intervals are merged, resolving potential index drift and preventing duplicate replacement tags (e.g. eliminating `[TAG][TAG]` or `[TAG]_REDACTED`).
+  - Text is reconstructed by right-to-left reverse interval slicing (`text[:s] + placeholder + text[e:]`), preserving character integrity for all earlier spans.
+* **Complete Idempotency:** Existing canonical redaction tokens (e.g. `[EMAIL_REDACTED]`, `[PHONE_REDACTED]`) are recognized and excluded from re-scanning, ensuring that already-sanitized text is 100% idempotent.
+* **Unicode & Formatting Resilience:** Multi-byte UTF-8 characters (Hindi, Chinese, emojis), accents, newlines, and list indentations are preserved intact.
+
+### 2. Supported Entity Types & Standardized Tokens
+* `EMAIL_ADDRESS` $\rightarrow$ `[EMAIL_REDACTED]`
+* `PHONE_NUMBER` $\rightarrow$ `[PHONE_REDACTED]`
+* `BANK_ACCOUNT_NUMBER` / `BANK_ROUTING_ACCOUNT` / `IBAN_ACCOUNT` $\rightarrow$ `[BANK_ACCOUNT_REDACTED]`
+* `GOVERNMENT_ID_AADHAAR` $\rightarrow$ `[AADHAAR_REDACTED]`
+* `GOVERNMENT_ID_SSN` $\rightarrow$ `[SSN_REDACTED]`
+* `GOVERNMENT_ID_NINO` $\rightarrow$ `[NINO_REDACTED]`
+* `CREDIT_CARD` $\rightarrow$ `[CREDIT_CARD_REDACTED]`
+* `CREDENTIAL_PASSWORD` $\rightarrow$ `[PASSWORD_REDACTED]`
+* `API_KEY` / `AWS_KEY` / `OPENAI_API_KEY` / `GENERIC_SECRET_KEY` $\rightarrow$ `[API_KEY_REDACTED]`
+* `AUTHENTICATION_SECRET` / `JWT_TOKEN` / `BEARER_TOKEN` / `PRIVATE_KEY_BLOCK` $\rightarrow$ `[AUTH_SECRET_REDACTED]`
+* `DATABASE_CONNECTION_STRING` $\rightarrow$ `[DATABASE_CREDENTIALS_REDACTED]`
+* `MEDICAL_PATIENT_RECORD` $\rightarrow$ `[HEALTH_DATA_REDACTED]`
+* `PHYSICAL_STREET_ADDRESS` $\rightarrow$ `[ADDRESS_REDACTED]`
+* `PASSPORT_NUMBER` $\rightarrow$ `[PASSPORT_REDACTED]`
+* `IP_ADDRESS` $\rightarrow$ `[IP_REDACTED]`
+
+### 3. Credential & Injection Security Invariant
+* **Strict BLOCK Preservation:** Passwords, API keys, private keys, JWTs, and prompt injections NEVER downgrade to `SANITIZE`. They strictly maintain `BLOCK` authority with `sanitized_text = None` and `forward_prompt = None`.
+* **Zero Downstream LLM Invocation:** When a prompt is `BLOCKED`, the LLM gateway is completely bypassed.
+
+### 4. Zero Raw Value Leakage Guarantee
+* **LLM Gateway:** Receives ONLY the sanitized text for `SANITIZE` / `WARN` decisions.
+* **Chat History & Responses:** Receives ONLY the sanitized text.
+* **Structured Sanitization Result:** Returns `entities_removed` containing entity types, character lengths, spans, and placeholders—with ZERO raw sensitive values.
+* **Audit Logs:** Logs contain only entity categories and lengths, never raw sensitive values.
+
+### 5. Files Created & Modified
+
+#### Files Created:
+* [`tests/test_pipeline5_sanitization.py`](file:///c:/Users/sanja/Downloads/LLM/tests/test_pipeline5_sanitization.py) — 20 automated unit and integration tests covering all sanitization requirements.
+
+#### Files Modified:
+* [`privacy_engine/sanitizer.py`](file:///c:/Users/sanja/Downloads/LLM/privacy_engine/sanitizer.py) — Authoritative position-safe interval merging, complete token taxonomy, and idempotency protection.
+* [`backend/services/evidence_risk.py`](file:///c:/Users/sanja/Downloads/LLM/backend/services/evidence_risk.py) — Integrated structured `entities_removed` and `sanitization_applied` tracking.
+* [`backend/routes/chatbot.py`](file:///c:/Users/sanja/Downloads/LLM/backend/routes/chatbot.py) — Enforced `masked_prompt` and LLM sanitized forwarding for `SANITIZE` / `WARN` flows.
+* [`docs/PROJECT_AUDIT.md`](file:///c:/Users/sanja/Downloads/LLM/docs/PROJECT_AUDIT.md) — Updated with Pipeline 5 documentation.
+
+### 6. Verification & Test Suite Summary
+* **Pipeline 5 Dedicated Suite (`tests/test_pipeline5_sanitization.py`):** **20/20 Passed** (100%).
+* **Full Multi-Pipeline Regression Suite (Pipelines 1–5):** **203/203 Passed** (100%).
+* **Mandatory Architecture & Routing Suite (`tests/test_final_pipeline_verification.py`):** **8/8 Passed** (100%).
+
+---
+
+## 29. Pipeline 6 Implementation — MCP / Web Search Security & Privacy-Aware Tool Routing
+
+### 1. Tool Inventory & Audit
+All external tool execution pathways were inventoried and routed strictly through the authoritative Tool Security Gateway:
+* `search_web` (Real-time live multi-source web search & citations via DuckDuckGo, Wikipedia API, Google News RSS)
+* `deep_research` (Multi-source research synthesis and cross-verification)
+* `analyze_url` (Public web URL scraper & readability extractor)
+* `system_info` (Sanitized system metadata provider)
+
+### 2. Authoritative Tool Security Gateway
+Implemented in [`mcp_engine/tool_security_gateway.py`](file:///c:/Users/sanja/Downloads/LLM/mcp_engine/tool_security_gateway.py) as `secure_tool_call(tool_name, arguments, user_context)`:
+* **Tool Allowlist & Schema Validation:** Validates tool name against `APPROVED_TOOLS_REGISTRY` and validates parameter types, required fields, and string bounds.
+* **Pre-Execution Privacy Gate:** Evaluates tool arguments via `run_full_analysis` (Pipelines 1, 3, 4, 5).
+  - `BLOCK` $\rightarrow$ Completely halts execution, sets `external_request_count = 0`, returns structured security block.
+  - `SANITIZE` / `WARN` $\rightarrow$ Sanitizes argument values with canonical redaction tokens (`[EMAIL_REDACTED]`, `[PHONE_REDACTED]`, `[BANK_ACCOUNT_REDACTED]`, etc.) before making any external request.
+  - `WARN` (high personal context) $\rightarrow$ Requires explicit user confirmation (`confirmed_by_user=True`).
+  - `ALLOW` $\rightarrow$ Permits execution with minimized necessary data.
+
+### 3. Search Query Sanitization & Data Minimization
+* User queries containing PII or extraneous clauses are stripped of personal identifiers before reaching third-party search endpoints (e.g. `"What is the latest news about OpenAI? My email is john@example.com"` $\rightarrow$ `"What is the latest news about OpenAI? [EMAIL_REDACTED]"`).
+
+### 4. URL Validation & SSRF Protection
+* URLs are validated with strict scheme enforcement (`http` and `https` only).
+* Prohibits internal IP ranges, loopbacks (`127.0.0.1`, `localhost`), link-local AWS/GCP cloud metadata IPs (`169.254.169.254`), private CIDR subnets (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), and non-HTTP schemes (`file://`, `gopher://`, `ftp://`).
+
+### 5. External Output Trust Model & Indirect Prompt Injection Defense
+* Search snippets and MCP outputs are treated as **Untrusted Data**.
+* Structured outputs are tagged with:
+  ```json
+  {
+    "source": "external_tool",
+    "trusted_as_instruction": false,
+    "security_status": "untrusted_data"
+  }
+  ```
+* Output text is scanned by `run_full_analysis` to sanitize any accidental data leaks.
+
+### 6. Zero Raw Data Logging Policy
+* Tool logs contain only safe metadata: `tool_name`, `decision`, `risk_level`, `sanitization_applied`, `timestamp`, `status`, and latency. No raw secrets, credentials, or personal queries are written to logs.
+
+### 7. Files Created & Modified
+
+#### Files Created:
+* [`mcp_engine/tool_security_gateway.py`](file:///c:/Users/sanja/Downloads/LLM/mcp_engine/tool_security_gateway.py) — Authoritative Tool Security Gateway, URL validator, query sanitizer, and untrusted output isolation.
+* [`tests/test_pipeline6_tool_security.py`](file:///c:/Users/sanja/Downloads/LLM/tests/test_pipeline6_tool_security.py) — 20 automated unit and integration tests covering all tool security invariants.
+
+#### Files Modified:
+* [`backend/routes/chatbot.py`](file:///c:/Users/sanja/Downloads/LLM/backend/routes/chatbot.py) — Routed all MCP web search invocations through `secure_tool_call`.
+* [`docs/PROJECT_AUDIT.md`](file:///c:/Users/sanja/Downloads/LLM/docs/PROJECT_AUDIT.md) — Updated with Pipeline 6 documentation.
+
+### 8. Verification & Test Suite Summary
+* **Pipeline 6 Dedicated Suite (`tests/test_pipeline6_tool_security.py`):** **20/20 Passed** (100%).
+* **Full Multi-Pipeline Regression Suite (Pipelines 1–6):** **223/223 Passed** (100%).
+* **Mandatory Architecture & Routing Suite (`tests/test_final_pipeline_verification.py`):** **8/8 Passed** (100%).
+
+
+
 

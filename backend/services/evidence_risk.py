@@ -583,19 +583,25 @@ def run_full_analysis(text: str, mode: str = "REDACT") -> Dict[str, Any]:
         hybrid_result=hybrid_result,
     )
 
-    # 4. Sanitization for non-blocked payloads with actual standard PII
+    # 4. Authoritative Sanitization for non-blocked payloads
     has_standard_pii = any(e.get("category") not in ("Highly Personal Context", "Personal Context") for e in entities)
     if result["decision"] in ("WARN", "ALLOW", "SANITIZE") and entities and has_standard_pii:
         try:
             san_result = sanitizer.sanitize_text(text, mode=mode)
             result["sanitized_text"] = san_result["sanitized_text"]
-            result["redacted_entities"] = san_result["detected_entities"]
+            result["redacted_entities"] = san_result.get("detected_entities", [])
+            result["entities_removed"] = san_result.get("entities_removed", [])
+            result["sanitization_applied"] = san_result.get("sanitization_applied", True)
         except Exception:
             result["sanitized_text"] = text
             result["redacted_entities"] = []
+            result["entities_removed"] = []
+            result["sanitization_applied"] = False
     else:
         result["sanitized_text"] = text if result["decision"] != "BLOCK" else None
         result["redacted_entities"] = []
+        result["entities_removed"] = []
+        result["sanitization_applied"] = False
 
     result["forward_prompt"] = result["sanitized_text"] if result["decision"] != "BLOCK" else None
     result["is_mock"] = False

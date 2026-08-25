@@ -27,16 +27,18 @@ except ImportError:
     logger.warning("google-genai SDK not installed.")
 
 # ── Configuration Constants ───────────────────────────────────────────────────
-DEFAULT_MODEL = os.getenv("DEFAULT_LLM_MODEL") or getattr(config, "DEFAULT_LLM_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.getenv("DEFAULT_LLM_MODEL") or getattr(config, "DEFAULT_LLM_MODEL", "gemini-3.6-flash")
 TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "15.0"))
 MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
 
-# Supported standard models in preferred cascade order
+# Supported standard models in preferred cascade order (Active models on Google GenAI API)
 STANDARD_CANDIDATE_MODELS = [
     DEFAULT_MODEL,
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.7-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-flash-latest",
 ]
 
 
@@ -45,6 +47,7 @@ def classify_llm_error(exc: Exception) -> Tuple[str, str, bool]:
     Classifies an exception into standard (error_type, message, is_retryable).
     Standard error types:
       - LLM_AUTH_ERROR
+      - LLM_INVALID_MODEL
       - LLM_QUOTA_EXCEEDED
       - LLM_RATE_LIMITED
       - LLM_TIMEOUT
@@ -55,14 +58,23 @@ def classify_llm_error(exc: Exception) -> Tuple[str, str, bool]:
     """
     err_str = str(exc).lower()
 
+    # Extract clean message if available from Google SDK exception objects
+    detail_msg = getattr(exc, "message", None) or str(exc)
+    # Sanitize any potential key occurrences in error string
+    import re
+    detail_msg = re.sub(r'AIza[0-9A-Za-z-_]{35}', '[API_KEY_REDACTED]', str(detail_msg))
+
     if any(k in err_str for k in ["api_key_invalid", "api key not valid", "unauthenticated", "401", "403", "permission_denied"]):
         return ("LLM_AUTH_ERROR", "Invalid or unauthorized Gemini API key.", False)
+
+    if any(k in err_str for k in ["404", "not_found", "no longer available", "not found", "is not supported"]):
+        return ("LLM_INVALID_MODEL", f"Configured Gemini model is not available or has been updated: {detail_msg}", False)
 
     if any(k in err_str for k in ["resource_exhausted", "quota exceeded", "exceeded your current quota", "free_tier_requests"]):
         return ("LLM_QUOTA_EXCEEDED", "Gemini API quota has been exceeded for the configured model.", False)
 
-    if "429" in err_str or "too many requests" in err_str or "rate limit" in err_str:
-        return ("LLM_RATE_LIMITED", "Gemini API rate limit reached. Please retry in a moment.", True)
+    if "429" in err_str or "too many requests" in err_str or "rate limit" in err_str or "503" in err_str or "high demand" in err_str or "service unavailable" in err_str:
+        return ("LLM_RATE_LIMITED", "Gemini API rate limit or capacity reached. Cascading to available model.", True)
 
     if isinstance(exc, (TimeoutError,)) or any(k in err_str for k in ["timed out", "timeout", "timeouterror", "deadline_exceeded"]):
         return ("LLM_TIMEOUT", "Gemini API request timed out.", True)
@@ -73,7 +85,8 @@ def classify_llm_error(exc: Exception) -> Tuple[str, str, bool]:
     if any(k in err_str for k in ["empty response", "blocked by safety", "finish_reason"]):
         return ("LLM_INVALID_RESPONSE", "Gemini returned an empty or safety-blocked response.", False)
 
-    return ("LLM_UNKNOWN_ERROR", f"LLM generation failed: {type(exc).__name__}", False)
+    return ("LLM_UNKNOWN_ERROR", f"LLM generation failed: {type(exc).__name__} ({detail_msg})", False)
+
 
 
 class GeminiClient:
