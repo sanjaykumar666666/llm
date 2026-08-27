@@ -208,12 +208,16 @@ div[data-testid="stSidebarHeader"],
     box-shadow: 4px 0 40px rgba(0, 0, 0, 0.6), inset -1px 0 0 rgba(59, 130, 246, 0.1) !important;
 }
 
-/* Sidebar navigation buttons */
+/* Sidebar navigation buttons (Inactive) */
 section[data-testid="stSidebar"] button,
 section[data-testid="stSidebar"] .stButton > button,
 section[data-testid="stSidebar"] [data-testid="baseButton-secondary"],
+section[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"],
+section[data-testid="stSidebar"] button[kind="secondary"],
 div[data-testid="stSidebar"] button,
-div[data-testid="stSidebar"] .stButton button {
+div[data-testid="stSidebar"] .stButton button,
+div[data-testid="stSidebar"] [data-testid="baseButton-secondary"],
+div[data-testid="stSidebar"] button[kind="secondary"] {
     background: rgba(10, 25, 48, 0.65) !important;
     background-color: rgba(10, 25, 48, 0.65) !important;
     color: #94A3B8 !important;
@@ -238,6 +242,7 @@ div[data-testid="stSidebar"] .stButton button {
 }
 
 section[data-testid="stSidebar"] button:hover,
+section[data-testid="stSidebar"] button[kind="secondary"]:hover,
 div[data-testid="stSidebar"] button:hover {
     background: rgba(6, 182, 212, 0.14) !important;
     background-color: rgba(6, 182, 212, 0.14) !important;
@@ -247,9 +252,14 @@ div[data-testid="stSidebar"] button:hover {
     box-shadow: 0 0 20px rgba(6, 182, 212, 0.22), inset 0 0 15px rgba(6, 182, 212, 0.06) !important;
 }
 
-/* Active Navigation Item */
+/* Active Navigation Item (Guaranteed Deep Blue & Purple Gradient — Never Red) */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"],
-div[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
+section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
+section[data-testid="stSidebar"] button[kind="primary"],
+section[data-testid="stSidebar"] .stButton > button[kind="primary"],
+div[data-testid="stSidebar"] [data-testid="baseButton-primary"],
+div[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
+div[data-testid="stSidebar"] button[kind="primary"] {
     background: linear-gradient(135deg, #2563EB 0%, #7C3AED 50%, #8B5CF6 100%) !important;
     background-color: #2563EB !important;
     color: #FFFFFF !important;
@@ -269,7 +279,9 @@ div[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
 }
 
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover,
-div[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover {
+section[data-testid="stSidebar"] button[kind="primary"]:hover,
+div[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover,
+div[data-testid="stSidebar"] button[kind="primary"]:hover {
     background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #A78BFA 100%) !important;
     box-shadow:
         0 6px 30px rgba(37, 99, 235, 0.65),
