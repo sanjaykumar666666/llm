@@ -124,13 +124,21 @@ class VideoPrivacyService:
                 except Exception:
                     pass
 
-    # ── 2. SAMPLE PRESET VIDEO GENERATOR ───────────────────────────────────────
+    # ── 2. ANIMATED SYNTHETIC TEST VIDEO GENERATION ───────────────────────────
+
+    _sample_bytes_cache: Dict[str, Tuple[bytes, str]] = {}
+    _pipeline_cache: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
-    def generate_sample_video(cls, preset_name: str) -> Tuple[bytes, str]:
+    def generate_sample_video(cls, preset_name: str = "Identity Video") -> Tuple[bytes, str]:
         """
-        Generates realistic animated test videos with smooth object/card motion across frames.
+        Generates realistic animated test videos featuring moving sensitive artifacts
+        (Aadhaar Card, PAN Card, Credit Card, Password, Face, Barcodes) with frame counters and timestamps.
+        Results are cached in memory for instantaneous sub-millisecond page loading.
         """
+        if preset_name in cls._sample_bytes_cache:
+            return cls._sample_bytes_cache[preset_name]
+
         width, height = 640, 360
         fps = 15.0
         duration_sec = 3.0
@@ -243,7 +251,9 @@ class VideoPrivacyService:
                 except Exception:
                     pass
 
-        return vid_bytes, f"preset_{preset_name.lower().replace(' ', '_')[:20]}.mp4"
+        res = (vid_bytes, f"preset_{preset_name.lower().replace(' ', '_')[:20]}.mp4")
+        cls._sample_bytes_cache[preset_name] = res
+        return res
 
     @staticmethod
     def convert_to_h264_mp4(input_video_path: str, output_video_path: Optional[str] = None) -> str:
@@ -1132,6 +1142,10 @@ class VideoPrivacyService:
                 "verified": False,
             }
 
+        pipe_cache_key = f"{hashlib.sha256(video_bytes).hexdigest()[:16]}_{protection_mode}_{protect_faces}_{protect_qr_barcodes}_{remove_audio}_{sampling_fps}"
+        if pipe_cache_key in cls._pipeline_cache:
+            return cls._pipeline_cache[pipe_cache_key]
+
         allocated_temp_paths: List[str] = []
         tmp_in_path = None
         tmp_out_path = None
@@ -1196,7 +1210,7 @@ class VideoPrivacyService:
             orig_sha256 = hashlib.sha256(video_bytes).hexdigest()
             prot_sha256 = hashlib.sha256(protected_bytes).hexdigest() if protected_bytes else ""
 
-            return {
+            res_dict = {
                 "status": "success",
                 "metadata": meta,
                 "scan_results": scan_results,
@@ -1212,6 +1226,8 @@ class VideoPrivacyService:
                 "processing_time_ms": elapsed_ms,
                 "receipt_id": f"ATC-VID-{int(time.time()*1000)%1000000:06d}",
             }
+            cls._pipeline_cache[pipe_cache_key] = res_dict
+            return res_dict
 
         finally:
             # Clean up all allocated temporary files safely
