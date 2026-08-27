@@ -153,7 +153,7 @@ def render_video_analyzer_view() -> None:
 
         with c_opt2:
             remove_audio = st.checkbox("🎙️ Remove Audio Track", value=True, key="vid_remove_audio")
-            sampling_rate = st.slider("Scan FPS:", min_value=1.0, max_value=5.0, value=3.0, step=1.0, key="vid_sampling_fps")
+            sampling_rate = st.slider("Scan FPS:", min_value=1.0, max_value=5.0, value=2.0, step=0.5, key="vid_sampling_fps")
 
         # ── Step 3: Run Video Privacy Shield Pipeline ─────────────────────────
         file_sha256 = hashlib.sha256(file_bytes).hexdigest()[:16] if file_bytes else "empty"

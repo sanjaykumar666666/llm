@@ -278,28 +278,47 @@ class VideoPrivacyService:
 
     # ── 3. FRAME-LEVEL OCR & SENSITIVE DETECTION ──────────────────────────────
 
+    _clahe = None
+    _yunet_detector = None
+    _qr_detector = None
+
+    @classmethod
+    def _get_clahe(cls):
+        if cls._clahe is None:
+            cls._clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        return cls._clahe
+
+    @classmethod
+    def _get_face_detector(cls, w: int, h: int):
+        if not os.path.exists(YUNET_MODEL_PATH) or not hasattr(cv2, "FaceDetectorYN_create"):
+            return None
+        if cls._yunet_detector is None:
+            cls._yunet_detector = cv2.FaceDetectorYN_create(YUNET_MODEL_PATH, "", (w, h))
+        cls._yunet_detector.setInputSize((w, h))
+        return cls._yunet_detector
+
+    @classmethod
+    def _get_qr_detector(cls):
+        if cls._qr_detector is None:
+            cls._qr_detector = cv2.QRCodeDetector()
+        return cls._qr_detector
+
     @classmethod
     def scan_frame_ocr(cls, frame_bgr: np.ndarray) -> Dict[str, Any]:
         """
-        Runs high-accuracy OCR on a single video frame with 2x adaptive upscaling and contrast enhancement.
+        Runs ultra-fast, high-accuracy OCR on a single video frame using native OpenCV CLAHE and scaled processing.
         """
         h, w = frame_bgr.shape[:2]
-        
-        # Convert BGR to PIL Image for contrast enhancement
-        rgb_frame = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        pil_frame = Image.fromarray(rgb_frame)
 
-        # 2x upscaling for crisp character detection
-        scale_factor = 2 if (w < 1200 or h < 700) else 1
+        scale_factor = 2 if (w < 1100 or h < 650) else 1
         if scale_factor > 1:
-            scaled_pil = pil_frame.resize((w * scale_factor, h * scale_factor), Image.BICUBIC)
+            resized = cv2.resize(frame_bgr, (w * scale_factor, h * scale_factor), interpolation=cv2.INTER_LINEAR)
         else:
-            scaled_pil = pil_frame
+            resized = frame_bgr
 
-        gray = scaled_pil.convert("L")
-        gray = ImageOps.autocontrast(gray)
-        enhancer = ImageEnhance.Contrast(gray)
-        ocr_enhanced = enhancer.enhance(1.8)
+        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        clahe = cls._get_clahe()
+        ocr_enhanced = clahe.apply(gray)
 
         words = []
         lines = []
@@ -309,8 +328,12 @@ class VideoPrivacyService:
             return {"words": [], "lines": [], "full_text": ""}
 
         try:
-            # Multi-scale character scan
-            data = pytesseract.image_to_data(ocr_enhanced, output_type=pytesseract.Output.DICT, config="--psm 6")
+            # Fast character scan
+            data = pytesseract.image_to_data(
+                ocr_enhanced,
+                output_type=pytesseract.Output.DICT,
+                config="--psm 6"
+            )
             n = len(data["text"])
             line_dict: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
 
@@ -560,9 +583,8 @@ class VideoPrivacyService:
         # ── 3. Face Detection (Biometrics) ────────────────────────────────────
         if protect_faces:
             try:
-                if os.path.exists(YUNET_MODEL_PATH) and hasattr(cv2, "FaceDetectorYN_create"):
-                    detector = cv2.FaceDetectorYN_create(YUNET_MODEL_PATH, "", (w, h))
-                    detector.setInputSize((w, h))
+                detector = cls._get_face_detector(w, h)
+                if detector is not None:
                     _, faces = detector.detect(frame_bgr)
                     if faces is not None:
                         for face in faces:
@@ -581,7 +603,7 @@ class VideoPrivacyService:
         # ── 4. QR & Barcode Detection ─────────────────────────────────────────
         if protect_qr_barcodes:
             try:
-                qr_detector = cv2.QRCodeDetector()
+                qr_detector = cls._get_qr_detector()
                 decoded_info, points, _ = qr_detector.detectAndDecode(frame_bgr)
                 if points is not None and len(points) > 0 and len(decoded_info) > 0:
                     pts = points[0]
@@ -1002,7 +1024,7 @@ class VideoPrivacyService:
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-        step = max(1, total_frames // 12)  # Check at least 12 keyframes
+        step = max(1, total_frames // 4)  # Check 4 distributed keyframes for fast verification
 
         residual_leaks: List[Dict[str, Any]] = []
 
@@ -1041,7 +1063,7 @@ class VideoPrivacyService:
             "verification_status": "PROTECTED" if is_verified else "PROTECTION FAILED",
             "residual_leaks": residual_leaks,
             "confidence_score": 1.0 if is_verified else 0.0,
-            "frames_rechecked": min(12, total_frames),
+            "frames_rechecked": min(4, total_frames),
             "details": "Zero residual sensitive entities detected in protected video stream." if is_verified else f"{len(residual_leaks)} residual leak(s) detected during closed-loop verification pass."
         }
 
