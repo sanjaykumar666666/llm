@@ -1,12 +1,17 @@
-"""
-AI Privacy Shield — Enterprise Navigation Sidebar (Dual Theme Aware).
-File: frontend/components/sidebar.py
-
-Premium sidebar with glowing shield icon, gradient active state,
-and hover animations. 280px width, deep navy / pearl ice dual styling.
-"""
-
+import base64
+from pathlib import Path
 import streamlit as st
+
+
+def _get_logo_b64() -> str:
+    logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
+    if logo_path.exists():
+        try:
+            with open(logo_path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode('utf-8')}"
+        except Exception:
+            pass
+    return ""
 
 
 def render_sidebar() -> str:
@@ -22,29 +27,21 @@ def render_sidebar() -> str:
     footer_border = "rgba(16,185,129,0.25)" if is_dark else "rgba(16,185,129,0.35)"
     footer_sub = "#94A3B8" if is_dark else "#64748B"
     divider_color = "rgba(59,130,246,0.15)" if is_dark else "rgba(203,213,225,0.6)"
+    logo_b64 = _get_logo_b64()
 
     with st.sidebar:
-        # ── PREMIUM BRAND HEADER WITH GLOWING SHIELD ──────────────────────────
+        # ── PREMIUM BRAND HEADER WITH OFFICIAL LOGO ──────────────────────────
+        logo_html = f"""<img src="{logo_b64}" style="width:48px; height:48px; border-radius:12px; object-fit:contain; box-shadow:0 0 20px rgba(56,189,248,0.45); border:1px solid rgba(56,189,248,0.35); flex-shrink:0; background:rgba(15,23,42,0.6);" alt="AI Privacy Shield" />""" if logo_b64 else """<div style="background: linear-gradient(135deg, #2563EB 0%, #7C3AED 50%, #06B6D4 100%); width:46px; height:46px; border-radius:13px; display:flex; align-items:center; justify-content:center; font-size:22px;">🛡️</div>"""
+
         st.markdown(
             f"""
-            <div style="padding: 12px 6px 20px 6px;">
-                <div style="display:flex; align-items:center; gap:14px;">
-                    <div style="
-                        background: linear-gradient(135deg, #2563EB 0%, #7C3AED 50%, #06B6D4 100%);
-                        width:46px; height:46px; border-radius:13px;
-                        display:flex; align-items:center; justify-content:center;
-                        font-size:22px;
-                        box-shadow: 0 0 25px rgba(37,99,235,0.55), 0 0 45px rgba(139,92,246,0.35), 0 4px 14px rgba(0,0,0,0.35);
-                        border: 1.5px solid rgba(147,197,253,0.45);
-                        animation: soc-glow-pulse 3s ease-in-out infinite;
-                        position: relative; flex-shrink: 0;
-                    ">
-                        🛡️
-                    </div>
+            <div style="padding: 12px 6px 18px 6px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    {logo_html}
                     <div>
                         <div style="
                             font-size:16.5px; font-weight:900;
-                            letter-spacing:0.6px; line-height:1.15;
+                            letter-spacing:0.5px; line-height:1.15;
                             background: {title_gradient};
                             -webkit-background-clip: text;
                             -webkit-text-fill-color: transparent;
@@ -52,7 +49,7 @@ def render_sidebar() -> str:
                         ">AI PRIVACY SHIELD</div>
                         <div style="
                             color:{sub_color}; font-size:10px; font-weight:800;
-                            letter-spacing:1.3px; margin-top:3px;
+                            letter-spacing:1.2px; margin-top:3px;
                             text-transform: uppercase;
                         ">MULTIMODAL SECURITY</div>
                     </div>

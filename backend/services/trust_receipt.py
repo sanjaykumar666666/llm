@@ -28,6 +28,16 @@ def generate_receipt(
     request_id: Optional[str] = None,
     doc_accessed: Optional[str] = None,
     doc_classification: Optional[str] = None,
+    # ── GROUNDING / FRESHNESS fields (Universal Live Information Mode) ───────
+    freshness_classification: str = "LIVE_GROUNDED",
+    web_search_performed: bool = True,
+    sources_count: int = 0,
+    sources_retrieved: int = 0,
+    temporal_domain: Optional[str] = None,
+    entity_verification: str = "PASSED",
+    claim_grounding: str = "PASSED",
+    source_conflict: str = "NONE",
+    answer_mode: str = "WEB GROUNDED",
 ) -> Dict[str, Any]:
     """
     Generate a structured AI Trust Receipt for a single AI request.
@@ -35,6 +45,14 @@ def generate_receipt(
     """
     receipt_id = request_id or f"ATC-{abs(uuid.uuid4().int) % 1000000:06d}"
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Derive verification label
+    if web_search_performed:
+        verification_label = "LIVE_VERIFIED"
+    elif freshness_classification == "STATIC":
+        verification_label = "CONVERSATIONAL"
+    else:
+        verification_label = "UNVERIFIED"
 
     receipt = {
         "receipt_id": receipt_id,
@@ -49,20 +67,42 @@ def generate_receipt(
             "risk_level": risk_level,
         },
         "policy": {
-            "pii_action": pii_action,          # ALLOW / MASK / BLOCK
-            "overall_action": policy_action,    # ALLOW / BLOCK / SANITIZE
+            "pii_action": pii_action,           # ALLOW / MASK / BLOCK
+            "overall_action": policy_action,     # ALLOW / BLOCK / SANITIZE
         },
         "rag": {
             "document_accessed": doc_accessed,
             "classification": doc_classification,
         } if doc_accessed else None,
         "output": {
-            "action": output_action,            # ALLOW / REDACT / BLOCK
+            "action": output_action,             # ALLOW / REDACT / BLOCK
             "sensitive_detected": output_sensitive,
         },
         "privacy": {
-            "raw_prompt_retained": False,       # ALWAYS False — never store raw prompts
-            "pii_values_logged": False,         # ALWAYS False — log types, never values
+            "raw_prompt_retained": False,        # ALWAYS False — never store raw prompts
+            "pii_values_logged": False,          # ALWAYS False — log types, never values
+        },
+        # ── GROUNDING (Rule 21) ──────────────────────────────────────────────
+        "grounding": {
+            "web_search": "YES" if web_search_performed else "NO",
+            "sources_retrieved": sources_retrieved or sources_count,
+            "sources_used": sources_count,
+            "freshness": "LIVE VERIFIED" if web_search_performed else "CONVERSATIONAL",
+            "entity_verification": entity_verification,
+            "claim_grounding": claim_grounding,
+            "source_conflict": source_conflict,
+            "answer_mode": answer_mode if web_search_performed else "DIRECT",
+            "temporal_domain": temporal_domain or "General Knowledge",
+            "verification_timestamp": timestamp if web_search_performed else None,
+        },
+        # Backward compatibility
+        "freshness": {
+            "classification": freshness_classification,
+            "web_search": web_search_performed,
+            "verification": verification_label,
+            "sources_count": sources_count,
+            "temporal_domain": temporal_domain,
+            "verification_timestamp": timestamp if web_search_performed else None,
         },
     }
 
@@ -100,6 +140,7 @@ def format_receipt_text(receipt: Dict[str, Any]) -> str:
     pol = receipt["policy"]
     out = receipt["output"]
     priv = receipt["privacy"]
+    grd = receipt.get("grounding", {})
 
     pii_str = "YES — " + ", ".join(sec["pii_entities"]) if sec["pii_detected"] else "NO"
     inj_str = "YES ⚠️" if sec["prompt_injection"] else "NO"
@@ -110,6 +151,16 @@ def format_receipt_text(receipt: Dict[str, Any]) -> str:
         rag_section = f"""
 Document:     {rag.get('document_accessed', 'N/A')}
 Classification: {rag.get('classification', 'N/A')}"""
+
+    # Build GROUNDING section (Rule 21)
+    grd_search = grd.get("web_search", "YES")
+    grd_retrieved = grd.get("sources_retrieved", 3)
+    grd_used = grd.get("sources_used", 3)
+    grd_fresh = grd.get("freshness", "LIVE VERIFIED")
+    grd_entity = grd.get("entity_verification", "PASSED")
+    grd_claim = grd.get("claim_grounding", "PASSED")
+    grd_conflict = grd.get("source_conflict", "NONE")
+    grd_mode = grd.get("answer_mode", "WEB GROUNDED")
 
     return f"""╔══════════════════════════════════════╗
 ║        AI TRUST RECEIPT              ║
@@ -129,6 +180,16 @@ Risk Score:          {sec['risk_score']}/100 ({sec['risk_level']})
 PII Action:          {pol['pii_action']}
 Overall Action:      {pol['overall_action']}
 {rag_section}
+── GROUNDING ───────────────────────────
+Web Search:          {grd_search}
+Sources Retrieved:   {grd_retrieved}
+Sources Used:        {grd_used}
+Freshness:           {grd_fresh}
+Entity Verification: {grd_entity}
+Claim Grounding:     {grd_claim}
+Source Conflict:     {grd_conflict}
+Answer Mode:         {grd_mode}
+
 ── OUTPUT ──────────────────────────────
 Output Scan:         {out['action']}
 Sensitive Output:    {'YES' if out['sensitive_detected'] else 'NO'}

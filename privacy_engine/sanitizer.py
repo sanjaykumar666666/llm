@@ -30,6 +30,11 @@ TOKEN_MAP: Dict[str, str] = {
     "BANK_ROUTING_ACCOUNT": "[BANK_ACCOUNT_REDACTED]",
     "IBAN_ACCOUNT": "[BANK_ACCOUNT_REDACTED]",
     "CREDENTIAL_PASSWORD": "[PASSWORD_REDACTED]",
+    "CREDENTIAL_OTP": "[OTP_REDACTED]",
+    "CREDENTIAL_PIN": "[PIN_REDACTED]",
+    "CREDENTIAL_AUTH_TOKEN": "[AUTH_TOKEN_REDACTED]",
+    "CREDENTIAL_SECRET_KEY": "[SECRET_KEY_REDACTED]",
+    "CREDENTIAL_BANK_LOGIN": "[BANK_CREDENTIAL_REDACTED]",
     "AWS_KEY": "[API_KEY_REDACTED]",
     "AWS_ACCESS_KEY": "[API_KEY_REDACTED]",
     "GOOGLE_CLOUD_KEY": "[API_KEY_REDACTED]",
@@ -60,9 +65,21 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "PHONE_NUMBER",
-        r'(?<!\d)(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)|\b(?:\+91[\s-]?)?[6-9]\d{9}\b|\+44[\s.-]?(?:\d[\s.-]?){9,11}\b',
+        r'(?i)(?:\b(?:my|the|our|contact)?\s*(?:phone|mobile|cell|tel|telephone|whatsapp)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?((?:\+?91[-\s]?)?[6-9]\d{4}[-\s]?\d{5}|\+?1[\s.-]?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\d{10})["\']?)',
         "MEDIUM",
         "[PHONE_REDACTED]",
+    ),
+    (
+        "PHONE_NUMBER",
+        r'(?<!\d)(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)|\b(?:\+91[\s-]?)?[6-9]\d{4}[-\s]?\d{5}\b|\b(?:\+91[\s-]?)?[6-9]\d{9}\b|\+44[\s.-]?(?:\d[\s.-]?){9,11}\b',
+        "MEDIUM",
+        "[PHONE_REDACTED]",
+    ),
+    (
+        "GOVERNMENT_ID_AADHAAR",
+        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{12})["\']?)',
+        "HIGH",
+        "[AADHAAR_REDACTED]",
     ),
     (
         "GOVERNMENT_ID_AADHAAR",
@@ -71,8 +88,20 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         "[AADHAAR_REDACTED]",
     ),
     (
+        "GOVERNMENT_ID_PAN",
+        r'(?i)(?:\b(?:my|the|our)?\s*(?:pan|pan\s*card)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?([A-Za-z]{5}\d{4}[A-Za-z])["\']?)',
+        "HIGH",
+        "[PAN_REDACTED]",
+    ),
+    (
+        "GOVERNMENT_ID_PAN",
+        r'\b[A-Z]{5}\d{4}[A-Z]{1}\b',
+        "HIGH",
+        "[PAN_REDACTED]",
+    ),
+    (
         "GOVERNMENT_ID_SSN",
-        r'\b\d{3}-\d{2}-\d{4}\b|\b[A-Z]{5}\d{4}[A-Z]{1}\b',
+        r'\b\d{3}-\d{2}-\d{4}\b',
         "HIGH",
         "[SSN_REDACTED]",
     ),
@@ -81,6 +110,12 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         r'\b[A-CEGHJ-PR-TW-Z]{2}\s*\d{6}\s*[A-D]\b',
         "HIGH",
         "[NINO_REDACTED]",
+    ),
+    (
+        "PASSPORT_NUMBER",
+        r'(?i)(?:\b(?:my|the|our)?\s*(?:passport|ppt)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?([A-Za-z][0-9]{7,8})["\']?)',
+        "HIGH",
+        "[PASSPORT_REDACTED]",
     ),
     (
         "CREDIT_CARD",
@@ -111,6 +146,84 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         r'(?:\b(?:database|db|server|app|application|login|admin|account|root|user|api|client)?\s*(?:password|passwd|pwd))\s*[:=]\s*[\'"]?([^\s\'",;]{3,})[\'"]?|(?:\b(?:my|the|our|admin|user|root|account|db|database|server|app|application|login)?\s*(?:(?:database|db|server|app|application|login|admin|account|root|user)\s+)?(?:password|passwd|pwd)\s+is\s+[\'"]?([^\s\'",;]{3,})[\'"]?)|(?:\b(?:my|the|our)?\s*secret\s+(?:i\s+use\s+to\s+(?:log\s*in|access)|for\s+(?:logging\s*in|accessing|my\s+account))\s*(?:to\s+(?:my|the|our)\s+account)?\s*[:=is\s]+[\'"]?([^\s\'",;]{3,})[\'"]?)|(?:\b(?:deploy\s+credentials|server\s+credentials|login\s+credentials|account\s+credentials)\s*(?:for\s+[^:]+)?\s*[:=is\s]+[\'"]?([^\s\'",;]{3,})[\'"]?)',
         "CRITICAL",
         "[PASSWORD_REDACTED]",
+    ),
+    # ── OTP / One-Time Password Detection ─────────────────────────────────────
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:my|the|our|your)?\s*(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s+(?:is|was|=|:)\s*[\'"]?(\d{4,8})[\'"]?)',
+        "CRITICAL",
+        "[OTP_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s*(?:code|number|num|no)?\s*[:=]\s*[\'"]?(\d{4,8})[\'"]?)',
+        "CRITICAL",
+        "[OTP_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:my|the|our|your)?\s*(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s+[\'"]?(\d{4,8})[\'"]?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "[OTP_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:verification|2fa|two[- ]?factor|mfa|authentication)\s+(?:code|otp|pin)\s+(?:is|was|=|:)\s*[\'"]?(\d{4,8})[\'"]?)',
+        "CRITICAL",
+        "[OTP_REDACTED]",
+    ),
+    # ── PIN Detection ─────────────────────────────────────────────────────────
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:my|the|our|your)?\s*(?:atm|debit|credit|bank|card|transaction|upi|mobile)?\s*(?:pin|pin\s*(?:number|num|no|code))\s*(?:is|was|=|:)\s*[\'"]?(\d{4,6})[\'"]?)',
+        "CRITICAL",
+        "[PIN_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:atm|debit|credit|bank|card|transaction|upi|mobile)\s+pin\s*[:=]\s*[\'"]?(\d{4,6})[\'"]?)',
+        "CRITICAL",
+        "[PIN_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:my|the|our|your)?\s*(?:atm|debit|credit|bank|card|transaction|upi|mobile)?\s*(?:pin|pin\s*(?:number|num|no|code))\s+[\'"]?(\d{4,6})[\'"]?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "[PIN_REDACTED]",
+    ),
+    # ── Contextual Number-Only Password Detection ─────────────────────────────
+    (
+        "CREDENTIAL_PASSWORD",
+        r'(?:\b(?:my|the|our|admin|user|root|account)?\s*(?:password|passwd|pwd)\s+(?:is\s+)?[\'"]?(\d{4,})[\'"]?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "[PASSWORD_REDACTED]",
+    ),
+    # ── Auth Token / Session Token Disclosure ─────────────────────────────────
+    (
+        "CREDENTIAL_AUTH_TOKEN",
+        r'(?:\b(?:my|the|our)?\s*(?:auth(?:entication)?|session|access|refresh)\s*(?:token|key)\s+(?:is|was|=|:)\s*[\'"]?([^\s\'",;]{8,})[\'"]?)',
+        "CRITICAL",
+        "[AUTH_TOKEN_REDACTED]",
+    ),
+    # ── Secret Key Disclosure ─────────────────────────────────────────────────
+    (
+        "CREDENTIAL_SECRET_KEY",
+        r'(?:\b(?:my|the|our)?\s*(?:secret|private|signing|encryption)\s*(?:key|code|phrase)\s+(?:is|was|=|:)\s*[\'"]?([^\s\'",;]{6,})[\'"]?)',
+        "CRITICAL",
+        "[SECRET_KEY_REDACTED]",
+    ),
+    # ── Bank / Net Banking / UPI Credential Disclosure ────────────────────────
+    (
+        "CREDENTIAL_BANK_LOGIN",
+        r'(?:\b(?:net\s*banking|mobile\s*banking|internet\s*banking|online\s*banking|bank(?:ing)?)\s+(?:password|passwd|pwd|pin|login)\s+(?:is|was|=|:)\s*[\'"]?([^\s\'",;]{3,})[\'"]?)',
+        "CRITICAL",
+        "[BANK_CREDENTIAL_REDACTED]",
+    ),
+    (
+        "CREDENTIAL_BANK_LOGIN",
+        r'(?:\b(?:upi)\s+(?:pin|password|mpin)\s*(?:is|was|=|:)\s*[\'"]?(\d{4,6})[\'"]?)',
+        "CRITICAL",
+        "[BANK_CREDENTIAL_REDACTED]",
     ),
     (
         "AWS_KEY",
@@ -206,7 +319,7 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
 
 # Existing recognized redaction placeholders to ignore during re-scanning (Idempotency)
 EXISTING_REDACTION_PATTERN = re.compile(
-    r'\[(?:EMAIL|PHONE|AADHAAR|PAN|SSN|NINO|CREDIT_CARD|BANK_ACCOUNT|PASSWORD|API_KEY|AUTH_SECRET|HEALTH_DATA|ADDRESS|PASSPORT|IP|DATABASE_CREDENTIALS|GCP_KEY|AWS_KEY|SENDGRID_KEY|SLACK_TOKEN|GITHUB_TOKEN|JWT|PRIVATE_KEY|IBAN|HEALTH_RECORD|PAYMENT_CARD|BLOCKED_ADVERSARIAL_SEQUENCE)_REDACTED\]|\[EMAIL REDACTED\]|\[PHONE REDACTED\]|\[NAME REDACTED\]|\[AADHAAR REDACTED\]|\[PAN REDACTED\]|\[SSN REDACTED\]|\[NINO REDACTED\]|\[PASSPORT REDACTED\]|\[LICENSE REDACTED\]|\[VOTER ID REDACTED\]|\[PAYMENT CARD REDACTED\]|\[BANK ACCOUNT REDACTED\]|\[IBAN REDACTED\]|\[UPI ID REDACTED\]|\[PASSWORD REDACTED\]|\[AWS KEY REDACTED\]|\[GITHUB TOKEN REDACTED\]|\[API KEY REDACTED\]|\[GCP KEY REDACTED\]|\[SLACK TOKEN REDACTED\]|\[SECRET KEY REDACTED\]|\[JWT TOKEN REDACTED\]|\[BEARER TOKEN REDACTED\]|\[PRIVATE KEY REDACTED\]|\[DATABASE CREDENTIALS REDACTED\]|\[HEALTH RECORD REDACTED\]|\[ADDRESS REDACTED\]|\[IP ADDRESS REDACTED\]|\[BLOCKED_ADVERSARIAL_SEQUENCE\]',
+    r'\[(?:EMAIL|PHONE|AADHAAR|PAN|SSN|NINO|CREDIT_CARD|BANK_ACCOUNT|PASSWORD|API_KEY|AUTH_SECRET|HEALTH_DATA|ADDRESS|PASSPORT|IP|DATABASE_CREDENTIALS|GCP_KEY|AWS_KEY|SENDGRID_KEY|SLACK_TOKEN|GITHUB_TOKEN|JWT|PRIVATE_KEY|IBAN|HEALTH_RECORD|PAYMENT_CARD|BLOCKED_ADVERSARIAL_SEQUENCE|OTP|PIN|AUTH_TOKEN|SECRET_KEY|BANK_CREDENTIAL)_REDACTED\]|\[EMAIL REDACTED\]|\[PHONE REDACTED\]|\[NAME REDACTED\]|\[AADHAAR REDACTED\]|\[PAN REDACTED\]|\[SSN REDACTED\]|\[NINO REDACTED\]|\[PASSPORT REDACTED\]|\[LICENSE REDACTED\]|\[VOTER ID REDACTED\]|\[PAYMENT CARD REDACTED\]|\[BANK ACCOUNT REDACTED\]|\[IBAN REDACTED\]|\[UPI ID REDACTED\]|\[PASSWORD REDACTED\]|\[OTP REDACTED\]|\[PIN REDACTED\]|\[AUTH TOKEN REDACTED\]|\[SECRET KEY REDACTED\]|\[BANK CREDENTIAL REDACTED\]|\[AWS KEY REDACTED\]|\[GITHUB TOKEN REDACTED\]|\[API KEY REDACTED\]|\[GCP KEY REDACTED\]|\[SLACK TOKEN REDACTED\]|\[JWT TOKEN REDACTED\]|\[BEARER TOKEN REDACTED\]|\[PRIVATE KEY REDACTED\]|\[DATABASE CREDENTIALS REDACTED\]|\[HEALTH RECORD REDACTED\]|\[ADDRESS REDACTED\]|\[IP ADDRESS REDACTED\]|\[BLOCKED_ADVERSARIAL_SEQUENCE\]',
     re.IGNORECASE
 )
 
@@ -367,6 +480,14 @@ class PrivacySanitizer:
                 return f"••••••••{val[-4:]}"
             elif pii_type == "GOVERNMENT_ID_AADHAAR":
                 return f"••••-••••-{val[-4:]}"
+            elif pii_type == "CREDENTIAL_OTP":
+                return f"••••{val[-2:]}" if len(val) >= 2 else "••••••"
+            elif pii_type == "CREDENTIAL_PIN":
+                return f"••{val[-2:]}" if len(val) >= 2 else "••••"
+            elif pii_type in ("CREDENTIAL_PASSWORD", "CREDENTIAL_BANK_LOGIN"):
+                return f"{val[:1]}{'•' * (len(val) - 2)}{val[-1:]}" if len(val) >= 3 else "••••••"
+            elif pii_type in ("CREDENTIAL_AUTH_TOKEN", "CREDENTIAL_SECRET_KEY"):
+                return f"{val[:3]}{'•' * 8}{val[-3:]}" if len(val) >= 8 else "••••••••"
             return TOKEN_MAP.get(pii_type, default_tag)
 
         elif mode_upper == "SYNTHETIC":
@@ -379,6 +500,8 @@ class PrivacySanitizer:
                 "GOVERNMENT_ID_AADHAAR": "0000 0000 0000",
                 "BANK_ACCOUNT_NUMBER": "000000000000",
                 "IP_ADDRESS": "127.0.0.1",
+                "CREDENTIAL_OTP": "000000",
+                "CREDENTIAL_PIN": "0000",
             }
             return synthetic_map.get(pii_type, TOKEN_MAP.get(pii_type, default_tag))
 

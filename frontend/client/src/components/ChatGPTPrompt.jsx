@@ -129,7 +129,8 @@ export function ChatGPTPrompt({
           {
             id: Date.now() + 1,
             sender: 'assistant',
-            text: data.response || data.response_text || "Prompt processed with privacy protections."
+            text: data.response || data.response_text || "Prompt processed with privacy protections.",
+            sources: data.sources || (data.mcp_meta && data.mcp_meta.sources) || []
           }
         ]);
       } else {
@@ -149,7 +150,8 @@ export function ChatGPTPrompt({
           {
             id: Date.now() + 1,
             sender: 'assistant',
-            text: data.response || data.response_text || ""
+            text: data.response || data.response_text || "",
+            sources: data.sources || (data.mcp_meta && data.mcp_meta.sources) || []
           }
         ]);
       }
@@ -258,16 +260,52 @@ export function ChatGPTPrompt({
               </div>
             )}
             <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+
+            {/* Stable Verified Sources Section (Rule 9, 10, 23) */}
+            {msg.sources && msg.sources.length > 0 && (
+              <div style={{ marginTop: '0.75rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#38bdf8', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  📚 Verified Sources ({msg.sources.length} Used)
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {msg.sources.map((s, idx) => (
+                    <div key={idx} style={{ 
+                      background: 'rgba(30, 41, 59, 0.5)', 
+                      border: '1px solid rgba(255, 255, 255, 0.06)', 
+                      borderRadius: '6px', 
+                      padding: '0.35rem 0.6rem', 
+                      fontSize: '0.78rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <span style={{ color: '#38bdf8', fontWeight: '700', marginRight: '0.4rem' }}>[{s.citation_id || idx + 1}]</span>
+                        <a href={s.url || '#'} target="_blank" rel="noreferrer" style={{ color: '#f1f5f9', textDecoration: 'none', fontWeight: '600' }}>
+                          {s.title || 'Source'}
+                        </a>
+                      </div>
+                      <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontFamily: 'monospace', background: 'rgba(0,0,0,0.3)', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>
+                        {s.domain || 'web'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
 
         {sending && (
-          <div className="message-bubble message-assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="pulse-dot"></span> PrivacyShield AI is analyzing security & generating response...
+          <div className="message-bubble message-assistant" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+            <span style={{ fontSize: '1rem' }}>🌐</span>
+            <span style={{ color: '#f8fafc', fontSize: '0.85rem', fontWeight: '600' }}>
+              Verifying current information & synthesizing response…
+            </span>
             <button 
               onClick={() => setSending(false)} 
               className="btn-icon" 
-              style={{ padding: '0.15rem 0.4rem', fontSize: '0.72rem', marginLeft: '0.5rem' }}
+              style={{ padding: '0.15rem 0.4rem', fontSize: '0.72rem', marginLeft: 'auto' }}
             >
               <Square size={10} /> Stop
             </button>

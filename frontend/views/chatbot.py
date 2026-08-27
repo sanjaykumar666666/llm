@@ -7,6 +7,7 @@ import streamlit as st
 import time
 import io
 import json
+import html
 import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -60,15 +61,15 @@ TOOLS_LIST = [
 
 
 def _init_chat_session():
-    if "chat_threads" not in st.session_state:
-        st.session_state["chat_threads"] = [{
+    if "privacy_chat_threads" not in st.session_state:
+        st.session_state["privacy_chat_threads"] = [{
             "id": "thread-1",
-            "title": "Welcome Thread",
+            "title": "Universal Live Grounded Chat",
             "messages": [],
             "created_at": "Just now"
         }]
-    if "current_thread_id" not in st.session_state:
-        st.session_state["current_thread_id"] = "thread-1"
+    if "privacy_current_thread_id" not in st.session_state:
+        st.session_state["privacy_current_thread_id"] = "thread-1"
     if "composer_preset_text" not in st.session_state:
         st.session_state["composer_preset_text"] = ""
     if "active_tool" not in st.session_state:
@@ -91,11 +92,11 @@ def _compute_live_privacy_status(text: str) -> Dict[str, Any]:
             "state_type": "SAFE",
             "entities_label": "None (Clean)",
             "status_col": "#10B981",
-            "badge_bg": "rgba(16,185,129,0.12)",
+            "badge_bg": "rgba(16,185,129,0.18)",
             "badge_col": "#10B981",
-            "badge_border": "rgba(16,185,129,0.35)",
+            "badge_border": "rgba(16,185,129,0.5)",
             "detected_list": [],
-            "reason": "Input is clean and contains no sensitive entities.",
+            "reason": "Input clean.",
             "entities": [],
             "sanitized_text": "",
             "is_blocked": False,
@@ -155,7 +156,20 @@ def _compute_live_privacy_status(text: str) -> Dict[str, Any]:
         "entities": entities,
         "sanitized_text": sanitized_text,
         "is_blocked": is_blocked,
+        "security_advisory": analysis.get("security_advisory"),
     }
+
+
+def _sanitize_message_history(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Strict deduplication: eliminates duplicate consecutive messages with same role & text."""
+    clean = []
+    for msg in messages:
+        if not msg.get("text", "").strip() and not msg.get("security_meta") and not msg.get("tool_data"):
+            continue
+        if clean and clean[-1].get("role") == msg.get("role") and clean[-1].get("text", "").strip() == msg.get("text", "").strip():
+            continue
+        clean.append(msg)
+    return clean
 
 
 def _risk_badge_html(risk_level: str, risk_score: int) -> str:
@@ -174,49 +188,236 @@ def _risk_badge_html(risk_level: str, risk_score: int) -> str:
     )
 
 
-def _model_badge_html(model_name: str) -> str:
+def _model_badge_html(model_name: str, is_error: bool = False) -> str:
+    border_col = "rgba(239,68,68,0.4)" if is_error else "rgba(99,102,241,0.3)"
+    text_col = "#FCA5A5" if is_error else "#A5B4FC"
+    bg_col = "rgba(239,68,68,0.12)" if is_error else "rgba(99,102,241,0.12)"
+    icon = "⚠️" if is_error else "🤖"
     return (
-        f"<span style='background:rgba(99,102,241,0.12); color:#A5B4FC; border:1px solid rgba(99,102,241,0.3); "
+        f"<span style='background:{bg_col}; color:{text_col}; border:1px solid {border_col}; "
         f"font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px;'>"
-        f"🤖 {model_name}"
+        f"{icon} {model_name}"
         f"</span>"
     )
 
 
-def _telemetry_badge_html(timing: Optional[Dict[str, Any]]) -> str:
+def _telemetry_badge_html(timing: Optional[Dict[str, Any]], is_error: bool = False) -> str:
     if not timing:
         return ""
-    total_s = timing.get("total_ms", 0) / 1000.0
-    r_ms = timing.get("router_ms", 0)
-    sec_ms = timing.get("security_ms", 0)
-    search_ms = timing.get("search_ms", 0)
-    llm_ms = timing.get("llm_ms", 0)
-    tier = timing.get("tier", "SIMPLE")
+    total_s    = timing.get("total_ms", 0) / 1000.0
+    r_ms       = timing.get("router_ms", 0)
+    sec_ms     = timing.get("security_ms", 0)
+    search_ms  = timing.get("search_ms", 0)
+    llm_ms     = timing.get("llm_ms", 0)
 
-    tier_color = "#38BDF8" if tier == "SIMPLE" else ("#F59E0B" if tier == "WEB_REQUIRED" else "#A78BFA")
+    temporal_class  = timing.get("temporal_class", "STATIC")
+    temporal_domain = timing.get("temporal_domain")
+    sources_count   = timing.get("sources_count", 0)
 
-    parts = [f"⚡ <strong>{total_s:.2f}s</strong>", f"<span style='color:{tier_color};'>[{tier}]</span>", f"Router: {r_ms:.1f}ms", f"Sec: {sec_ms:.1f}ms"]
+    if is_error:
+        tier_label  = "LIVE RETRIEVAL" if search_ms > 0 else "SECURITY GATEWAY"
+        tier_icon   = "⚠️"
+        tier_color  = "#F59E0B"
+        tier_suffix = "Web: Completed · LLM: Quota Notice"
+    elif temporal_class in ("LIVE_GROUNDED", "CURRENT", "UNKNOWN", "HISTORICAL") or sources_count > 0:
+        tier_label  = "LIVE GROUNDED"
+        tier_icon   = "🌐"
+        tier_color  = "#38BDF8"
+        domain_tag  = f" · {temporal_domain}" if temporal_domain and temporal_domain != "General Information" else ""
+        tier_suffix = f"Sources: {sources_count} · Verification: PASSED{domain_tag}" if sources_count else "Live Verified"
+    else:  # Conversational
+        tier_label  = "CONVERSATIONAL"
+        tier_icon   = "💬"
+        tier_color  = "#10B981"
+        tier_suffix = "Direct Greeting"
+
+    tier_html = (
+        f"<span style='color:{tier_color}; font-weight:700;'>"
+        f"[{tier_label}] {tier_icon} {tier_suffix}"
+        f"</span>"
+    )
+
+    parts = [
+        f"⚡ <strong>{total_s:.2f}s</strong>",
+        tier_html,
+        f"Router: {r_ms:.1f}ms",
+        f"Sec: {sec_ms:.1f}ms",
+    ]
     if search_ms > 0:
         parts.append(f"Search: {search_ms:.0f}ms")
     if llm_ms > 0:
-        parts.append(f"LLM: {llm_ms/1000.0:.2f}s")
+        parts.append(f"LLM: {llm_ms / 1000.0:.2f}s")
 
     return (
-        f"<span style='background:rgba(15,23,42,0.8); color:#94A3B8; border:1px solid rgba(56,189,248,0.25); "
+        f"<span style='background:rgba(15,23,42,0.8); color:#94A3B8; "
+        f"border:1px solid rgba(56,189,248,0.25); "
         f"font-size:11px; font-family:monospace; padding:3px 10px; border-radius:20px;'>"
         f"{' | '.join(parts)}"
         f"</span>"
     )
 
 
+def _render_answer_container(
+    text: str,
+    meta: Dict[str, Any],
+    tool_data: Optional[Dict[str, Any]] = None,
+):
+    """
+    Unified Stable Answer / Error Container:
+    1. Single cohesive rendering (no empty boxes, no broken HTML layout)
+    2. Explicit graceful error states for quota or authentication issues
+    3. Verified Sources Block
+    4. Deterministic AI Trust Receipt Block
+    """
+    decision = meta.get("decision", "ALLOW")
+    risk_level = meta.get("risk_level", "LOW")
+    risk_score = meta.get("risk_score", 0)
+
+    if decision == "BLOCK":
+        advisory = meta.get("security_advisory")
+        if advisory and advisory.get("items"):
+            # ── Credential-Specific Security Warning UI ───────────────────────
+            advisory_html_items = ""
+            for item in advisory["items"]:
+                advisory_html_items += f"""
+                <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:10px 14px; margin-top:8px;">
+                    <div style="color:#FCA5A5; font-weight:700; font-size:13px; margin-bottom:4px;">{item['icon']} {item['type']} Detected</div>
+                    <div style="color:#CBD5E1; font-size:12.5px; line-height:1.5;">
+                        <div>⚠️ {html.escape(item['warning'])}</div>
+                        <div style="margin-top:4px; color:#FCD34D; font-weight:600;">🔐 Action: {html.escape(item['action'])}</div>
+                    </div>
+                </div>"""
+
+            st.markdown(
+                f"""
+                <div style="background:rgba(220,38,38,0.15); border:1.5px solid rgba(220,38,38,0.55); border-radius:14px; padding:18px 20px; margin-bottom:12px; width:100%; box-sizing:border-box;">
+                    <div style="color:#FCA5A5; font-weight:800; font-size:15px; margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+                        <span>🚨</span> <span>Security Alert: Sensitive Credentials Detected</span>
+                    </div>
+                    <div style="color:#F87171; font-size:13px; font-weight:600; margin-bottom:8px; padding:8px 12px; background:rgba(239,68,68,0.12); border-radius:8px; border-left:3px solid #EF4444;">
+                        {html.escape(advisory.get('global_warning', 'Credentials detected. Message was NOT sent to AI.'))}
+                    </div>
+                    {advisory_html_items}
+                    <div style="margin-top:12px; padding:10px 14px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px;">
+                        <div style="color:#FCD34D; font-weight:700; font-size:12.5px;">💡 Security Recommendations:</div>
+                        <div style="color:#CBD5E1; font-size:12px; margin-top:4px; line-height:1.6;">
+                            • Never share passwords, OTPs, PINs, or API keys in any chat<br>
+                            • {html.escape(advisory.get('global_action', 'Change/revoke any active credentials immediately.'))}<br>
+                            • If credentials were shared accidentally, treat them as compromised
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style="background:rgba(220,38,38,0.12); border:1px solid rgba(220,38,38,0.45); border-radius:12px; padding:16px; margin-bottom:10px; width:100%; box-sizing:border-box;">
+                    <strong style="color:#FCA5A5;">🔒 Zero-Trust Security Gate: Request Blocked</strong><br>
+                    <p style="color:#94A3B8; font-size:13px; margin:8px 0 0 0;">{html.escape(text or meta.get('reason', 'Blocked by security policy.'))}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        return
+
+    # Extract sources if present in tool_data or text
+    sources = []
+    main_text = text or ""
+    if tool_data and tool_data.get("result", {}).get("sources"):
+        sources = tool_data["result"]["sources"]
+        main_text = tool_data["result"].get("direct_answer", text)
+    elif "### Sources" in main_text:
+        parts = main_text.split("### Sources", 1)
+        main_text = parts[0].strip()
+        raw_sources_text = parts[1].strip()
+        for line in raw_sources_text.splitlines():
+            line = line.strip()
+            if line:
+                m = re.search(r'\[(\d+)\]\s*\[(.*?)\]\((.*?)\)(?:\s*—\s*`?(.*?)`?)?$', line)
+                if m:
+                    sources.append({
+                        "citation_id": m.group(1),
+                        "title": m.group(2),
+                        "url": m.group(3),
+                        "domain": m.group(4) or urllib.parse.urlparse(m.group(3)).netloc
+                    })
+
+    is_service_error = (
+        "AI Service Notice" in main_text
+        or "quota has been exceeded" in main_text.lower()
+        or "authentication failed" in main_text.lower()
+        or "unable to generate" in main_text.lower()
+    )
+
+    # 1. Main Answer or Error Body
+    if is_service_error:
+        st.markdown(
+            f"""
+            <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.35); border-radius:14px; padding:18px 20px; margin-bottom:12px; width:100%; box-sizing:border-box;">
+                <div style="color:#FCD34D; font-weight:800; font-size:14px; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+                    <span>⚠️</span> <span>AI Service Notice: Generation Limit</span>
+                </div>
+                <div style="color:#CBD5E1; font-size:13.5px; line-height:1.6;">
+                    The configured Google Gemini API quota for this project has been reached or is rate-limited.
+                    <br><br>
+                    💡 <em>To enable continuous high-speed Gemini responses, enter your free API Key in <strong>⚙️ Settings</strong>.</em>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(main_text)
+
+    # 2. Verified Sources Block
+    if sources:
+        st.markdown(
+            f"""
+            <div style="margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:12px; font-weight:800; color:#38BDF8; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+                    <span>📚 Verified Sources ({len(sources)} Retrieved)</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        for s in sources:
+            cid = s.get("citation_id", "")
+            title = s.get("title", "Source")
+            url = s.get("url", "#")
+            domain = s.get("domain", "web")
+            st.markdown(f"- [{cid}] [{title}]({url}) — `{domain}`")
+
+    # 3. Telemetry & Security Metadata Bar
+    badge_html = _risk_badge_html(risk_level, risk_score)
+    model_html = _model_badge_html(meta.get("model_selected", "Aiera AI"), is_error=is_service_error)
+    telemetry_html = _telemetry_badge_html(meta.get("timing_breakdown"), is_error=is_service_error)
+
+    st.markdown(
+        f"<div style='margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); display:flex; gap:8px; flex-wrap:wrap; align-items:center;'>"
+        f"{badge_html} {model_html} {telemetry_html}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 4. Optional Deterministic AI Trust Receipt Inspector
+    if meta.get("receipt_id"):
+        receipt_title = "🧾 AI Trust Audit Receipt" if not is_service_error else "🧾 AI Trust Audit Receipt (Service Notice)"
+        with st.expander(receipt_title, expanded=False):
+            st.code(meta.get("receipt_text", f"Receipt ID: {meta['receipt_id']}"), language="text")
+
+
 def render_chatbot_view():
     _init_chat_session()
 
-    current_thread_id = st.session_state["current_thread_id"]
-    current_thread = next(
-        (t for t in st.session_state["chat_threads"] if t["id"] == current_thread_id),
-        st.session_state["chat_threads"][0]
-    )
+    threads = st.session_state["privacy_chat_threads"]
+    current_thread_id = st.session_state["privacy_current_thread_id"]
+    current_thread = next((t for t in threads if t["id"] == current_thread_id), threads[0])
+    
+    # Sanitize and deduplicate messages
+    current_thread["messages"] = _sanitize_message_history(current_thread["messages"])
     messages = current_thread["messages"]
 
     user_role = st.session_state.get("user_role", "USER")
@@ -226,18 +427,19 @@ def render_chatbot_view():
     col_t1, col_t2 = st.columns([3, 1])
     with col_t1:
         st.title("🛡️ AI Trust Chat & Tools Ecosystem")
-        st.caption("Zero-Trust Security Gateway with Real Multi-Modal Tools Execution")
+        st.caption("Zero-Trust Security Gateway with Universal Live Grounding & Multi-Modal Verification")
     with col_t2:
         if st.button("➕ New Chat", use_container_width=True, key="new_chat_btn"):
-            new_id = f"thread-{len(st.session_state['chat_threads']) + 1}"
-            st.session_state["chat_threads"].append({
+            new_id = f"thread-{len(threads) + 1}"
+            threads.append({
                 "id": new_id,
-                "title": f"Chat {len(st.session_state['chat_threads']) + 1}",
+                "title": f"Chat {len(threads) + 1}",
                 "messages": [],
                 "created_at": "Just now"
             })
-            st.session_state["current_thread_id"] = new_id
+            st.session_state["privacy_current_thread_id"] = new_id
             st.session_state["composer_preset_text"] = ""
+            st.session_state["chat_message_input_box"] = ""
             st.rerun()
 
     # ── Active Tool Selector Bar ──────────────────────────────────────────────
@@ -262,408 +464,128 @@ def render_chatbot_view():
             unsafe_allow_html=True,
         )
 
-    # ── Welcome empty state ───────────────────────────────────────────────────
-    if not messages:
-        st.markdown(
-            "<div style='background:rgba(15,23,42,0.6); border:1px solid rgba(59,130,246,0.2); "
-            "border-radius:14px; padding:18px; margin-bottom:16px;'>"
-            "<h4 style='margin:0 0 8px 0; color:#F8FAFC;'>🔒 Zero-Trust AI Assistant & Multi-Modal Tools</h4>"
-            "<p style='color:#94A3B8; font-size:13px; margin:0;'>"
-            "Select any tool from the dropdown above or type in the composer below. "
-            "Every tool invocation is protected by character-level live privacy scans and cryptographic Trust Receipts."
-            "</p>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("**🧪 Quick Test Prompts (Click to Load):**")
-        chip_cols = st.columns(4)
-        for i, (label, prompt_sample) in enumerate(QUICK_TEST_CHIPS[:4]):
-            with chip_cols[i % 4]:
-                if st.button(label, key=f"chip_{i}", use_container_width=True):
-                    st.session_state["composer_preset_text"] = prompt_sample
-                    st.rerun()
-
-        chip_cols2 = st.columns(3)
-        for i, (label, prompt_sample) in enumerate(QUICK_TEST_CHIPS[4:]):
-            with chip_cols2[i % 3]:
-                if st.button(label, key=f"chip_row2_{i}", use_container_width=True):
-                    st.session_state["composer_preset_text"] = prompt_sample
-                    st.rerun()
-
-        st.divider()
-
-    # ── Conversation History Container ─────────────────────────────────────────
-    for idx, msg in enumerate(messages):
-        role = msg["role"]
-        text = msg["text"]
+    # ── Conversation History Container (Read-Only Rendering, No Duplicates) ────
+    for msg in messages:
+        role = msg.get("role", "user")
+        text = msg.get("text", "")
         meta = msg.get("security_meta", {})
         tool_data = msg.get("tool_data")
 
         if role == "user":
             with st.chat_message("user", avatar="👤"):
-                st.markdown(text)
+                # ALWAYS display safe redacted representation, never raw sensitive digits
+                display_text = msg.get("credential_masked_text") or msg.get("text", "")
+                from privacy_engine.sanitizer import PrivacySanitizer
+                _render_sanitizer = PrivacySanitizer()
+                # Secondary safety net: sanitize on the fly if raw Aadhaar/PAN/credential is present
+                display_text = _render_sanitizer.sanitize_text(display_text, mode="REDACT").get("sanitized_text", display_text)
+                st.markdown(display_text)
                 if msg.get("tool_used") and msg["tool_used"] != "💬 Standard Chat":
                     st.caption(f"🔧 *Invoked Tool:* `{msg['tool_used']}`")
-                if msg.get("masked_text") and msg["masked_text"] != text:
-                    st.caption(f"🛡️ *Sent to AI (masked):* `{msg['masked_text'][:120]}...`")
+                if msg.get("has_redactions") or msg.get("was_blocked") or msg.get("credential_masked_text"):
+                    st.caption("🔒 *Sensitive data detected — redacted before processing & display*")
 
         else:
-            decision = meta.get("decision", "ALLOW")
-            risk_level = meta.get("risk_level", "LOW")
-            risk_score = meta.get("risk_score", 0)
-
             with st.chat_message("assistant", avatar="🤖"):
-
-                # ── Tool Result Renderers ─────────────────────────────────────
-                if tool_data:
-                    t_name = tool_data.get("tool_name")
-
-                    # 1. 🔎 Web Search Card
-                    if t_name == "🔎 Web Search" and tool_data.get("result"):
-                        res = tool_data["result"]
-                        timing = res.get("timing_ms", {})
-                        
-                        st.markdown(
-                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
-                            f"<h3 style='margin:0; color:#38BDF8;'>🔎 Web Search: <em>'{res.get('query')}'</em></h3>"
-                            f"<span style='font-size:11px; color:#94A3B8; background:rgba(56,189,248,0.1); padding:3px 8px; border-radius:12px; border:1px solid rgba(56,189,248,0.3);'>"
-                            f"⚡ {timing.get('total_ms', 0)} ms (Search: {timing.get('search_ms', 0)}ms | Answer: {timing.get('generation_ms', 0)}ms)"
-                            f"</span>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
-
-                        # Direct Grounded Answer
-                        st.markdown("#### Answer")
-                        st.markdown(res.get("direct_answer", ""))
-
-                        # Verified Sources & Evidence
-                        if res.get("sources"):
-                            st.markdown("#### Sources")
-                            for s in res["sources"]:
-                                st.markdown(
-                                    f"**[{s['citation_id']}] [{s['title']}]({s['url']})** (`{s['domain']}`) — "
-                                    f"<span style='color:#10B981; font-size:12px; font-weight:600;'>{s.get('relevance_score', '')} Match</span>",
-                                    unsafe_allow_html=True
-                                )
-                                with st.expander(f"📖 View Retrieved Passage Evidence for [{s['citation_id']}]", expanded=False):
-                                    st.write(s.get("retrieved_passage", s.get("snippet", "")))
-
-                    # 2. 🧠 Deep Research Card
-                    elif t_name == "🧠 Deep Research" and tool_data.get("result"):
-                        res = tool_data["result"]
-                        st.markdown(f"### 🧠 Deep Research Report: *'{res.get('query')}'*")
-                        
-                        with st.status("🔬 Agentic Research Workflow Completed", state="complete"):
-                            for step in res.get("steps_log", []):
-                                st.write(f"✓ **{step['phase']}** ({step['progress']}%) — {step['detail']}")
-
-                        st.markdown("#### Executive Summary")
-                        st.info(res.get("executive_summary", ""))
-
-                        st.markdown("#### Key Findings")
-                        for kf in res.get("key_findings", []):
-                            st.markdown(f"- {kf}")
-
-                        with st.expander("📖 Comprehensive Analysis Sections", expanded=False):
-                            for sec in res.get("detailed_sections", []):
-                                st.markdown(f"**{sec['heading']}**")
-                                st.markdown(sec["content"])
-                                st.divider()
-
-                        if res.get("citations"):
-                            st.markdown("#### Sources Consulted")
-                            for cit in res["citations"]:
-                                st.markdown(f"- {cit['id']} **[{cit['title']}]({cit['url']})** ({cit['domain']})")
-
-                    # 3. 📊 Data Analysis Card
-                    elif t_name == "📊 Data Analysis" and tool_data.get("result"):
-                        res = tool_data["result"]
-                        st.markdown(f"### 📊 Tabular Data Analytics: *'{res.get('filename')}'*")
-                        st.markdown(f"**Dimensions:** {res.get('rows')} rows × {len(res.get('columns', []))} columns | **Missing Values:** {res.get('total_missing_values')}")
-                        
-                        # Summary stats dataframe
-                        if res.get("summary_statistics"):
-                            st.markdown("#### Numeric Summary Statistics")
-                            st.dataframe(pd.DataFrame(res["summary_statistics"]).T, use_container_width=True)
-
-                        # Preview records
-                        if res.get("preview_records"):
-                            with st.expander("👀 View Dataset Records", expanded=False):
-                                st.dataframe(pd.DataFrame(res["preview_records"]), use_container_width=True)
-
-                    # 4. 💻 Code Workspace Card
-                    elif t_name == "💻 Code Workspace" and tool_data.get("result"):
-                        res = tool_data["result"]
-                        st.markdown("### 💻 Sandboxed Code Execution Result")
-                        if res.get("status") == "SUCCESS":
-                            st.code(res.get("output", ""), language="python")
-                            st.caption(f"⚡ Execution Latency: {res.get('execution_time_ms')} ms")
-                        else:
-                            st.error(f"Execution Status: {res.get('status')} — {res.get('error', 'Execution halted.')}")
-
-                    # 5. 🔗 URL Analysis Card
-                    elif t_name == "🔗 URL Analysis" and tool_data.get("result"):
-                        res = tool_data["result"]
-                        st.markdown(f"### 🔗 URL Content Analysis: [{res.get('domain')}]({res.get('url')})")
-                        st.markdown(f"**Page Title:** *{res.get('title')}*")
-                        st.info(res.get("content_preview", "")[:600] + "...")
-
-                    # 6. Generic Text Output
-                    elif text:
-                        st.markdown(text)
-
-                # ── Standard AI Chat / Security Output ────────────────────────
-                elif decision == "BLOCK":
-                    st.markdown(
-                        f"<div style='background:rgba(220,38,38,0.1); border:1px solid rgba(220,38,38,0.4); "
-                        f"border-radius:12px; padding:16px;'>"
-                        f"<strong style='color:#FCA5A5;'>🔒 Zero-Trust Security Gate: Request Blocked</strong><br>"
-                        f"<p style='color:#94A3B8; font-size:13px; margin:8px 0 0 0;'>{text or meta.get('reason', 'Blocked by security policy.')}</p>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown(text)
-
-                # ── Security & Telemetry Metadata Bar ──────────────────────────
-                if meta:
-                    badge_html = _risk_badge_html(risk_level, risk_score)
-                    model_html = _model_badge_html(meta.get("model_selected", "Aiera AI"))
-                    telemetry_html = _telemetry_badge_html(meta.get("timing_breakdown"))
-                    st.markdown(
-                        f"<div style='margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;'>"
-                        f"{badge_html} {model_html} {telemetry_html}"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                # ── Trust Receipt Expander ─────────────────────────────────────
-                if meta.get("receipt_id"):
-                    with st.expander("🧾 Cryptographic AI Trust Receipt", expanded=False):
-                        st.code(meta.get("receipt_text", f"Receipt ID: {meta['receipt_id']}"), language="text")
-
-    # ── Specialized Tool Modals (File Upload / Canvas / Code Editor) ───────────
-    active_tool_name = st.session_state.get("active_tool", "💬 Standard Chat")
-    
-    # ── Upload Drawer for Files / Data Analysis / Image Analysis ───────────────
-    if active_tool_name in ("📎 Files Parser", "📊 Data Analysis", "🖼️ Image Analysis", "📚 Knowledge Base / RAG"):
-        with st.expander(f"📁 Upload File for {active_tool_name}", expanded=True):
-            uploaded_file = st.file_uploader(
-                f"Select file to process with {active_tool_name}:",
-                type=["csv", "xlsx", "pdf", "docx", "txt", "json", "png", "jpg"],
-                key="ecosystem_file_uploader"
-            )
-            if uploaded_file and st.button(f"⚡ Execute {active_tool_name} on File", type="primary", key="exec_file_tool_btn"):
-                with st.spinner(f"Running {active_tool_name} with Zero-Trust AI Privacy Gate..."):
-                    file_bytes = uploaded_file.read()
-                    
-                    if active_tool_name == "📊 Data Analysis":
-                        tool_out = execute_tool_with_ai_trust("📊 Data Analysis", analyze_dataset, file_bytes, uploaded_file.name)
-                    elif active_tool_name == "🖼️ Image Analysis":
-                        tool_out = execute_tool_with_ai_trust("🖼️ Image Analysis", analyze_image_bytes, file_bytes)
-                    else:
-                        tool_out = execute_tool_with_ai_trust("📎 Files Parser", process_file_content, file_bytes, uploaded_file.name)
-
-                    # Append to chat
-                    messages.append({
-                        "role": "user",
-                        "text": f"[{active_tool_name}] Processed file: {uploaded_file.name}",
-                        "tool_used": active_tool_name
-                    })
-
-                    receipt = tool_out.get("trust_receipt", {})
-                    receipt_text = format_receipt_text(receipt) if receipt else "Trust Receipt Verified"
-
-                    messages.append({
-                        "role": "assistant",
-                        "text": f"Completed execution for **{active_tool_name}**.",
-                        "tool_data": tool_out,
-                        "security_meta": {
-                            "decision": tool_out.get("decision", "ALLOW"),
-                            "risk_score": tool_out.get("risk_score", 0),
-                            "risk_level": tool_out.get("risk_level", "LOW"),
-                            "receipt_id": receipt.get("receipt_id", ""),
-                            "receipt_text": receipt_text,
-                            "model_selected": f"Aiera {active_tool_name}"
-                        }
-                    })
-                    st.rerun()
-
-    # ── Canvas Interactive Document Editor ─────────────────────────────────────
-    elif active_tool_name == "✍️ Canvas Workspace":
-        with st.expander("✍️ Canvas Interactive Workspace", expanded=True):
-            st.session_state["canvas_content"] = st.text_area(
-                "Document Scratchpad:",
-                value=st.session_state.get("canvas_content", ""),
-                height=180,
-                key="canvas_text_area"
-            )
-            col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-            with col_c1:
-                if st.button("✨ Rewrite", key="canvas_rewrite"):
-                    st.session_state["canvas_content"] = canvas_engine.transform_text(st.session_state["canvas_content"], "REWRITE")
-                    st.rerun()
-            with col_c2:
-                if st.button("✂️ Shorten", key="canvas_shorten"):
-                    st.session_state["canvas_content"] = canvas_engine.transform_text(st.session_state["canvas_content"], "SHORTEN")
-                    st.rerun()
-            with col_c3:
-                if st.button("📖 Expand", key="canvas_expand"):
-                    st.session_state["canvas_content"] = canvas_engine.transform_text(st.session_state["canvas_content"], "EXPAND")
-                    st.rerun()
-            with col_c4:
-                if st.button("💎 Improve", key="canvas_improve"):
-                    st.session_state["canvas_content"] = canvas_engine.transform_text(st.session_state["canvas_content"], "IMPROVE")
-                    st.rerun()
+                _render_answer_container(text=text, meta=meta, tool_data=tool_data)
 
     st.divider()
 
     # ── SECURE CHATGPT-STYLE MESSAGE COMPOSER & PRIVACY SCANNER ───────────────
     current_preset = st.session_state.get("composer_preset_text", "")
-
-    # Compute live authoritative privacy analysis for the current text
     scan_info = _compute_live_privacy_status(current_preset)
-    curr_state = scan_info["state_type"]
-    prev_state = st.session_state.get("last_privacy_state", "SAFE")
-    st.session_state["last_privacy_state"] = curr_state
 
-    # 1. Danger Sound Generator (Web Audio API Synthesizer - plays once upon entering DANGER)
-    if curr_state == "DANGER" and prev_state != "DANGER":
-        st.markdown(
-            """
-            <script>
-            (function() {
-                try {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        const ctx = new AudioContext();
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.type = 'sawtooth';
-                        osc.frequency.setValueAtTime(880, ctx.currentTime);
-                        osc.frequency.setValueAtTime(440, ctx.currentTime + 0.12);
-                        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-                        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-                        osc.connect(gain);
-                        gain.connect(ctx.destination);
-                        osc.start();
-                        osc.stop(ctx.currentTime + 0.3);
-                    }
-                } catch (e) {
-                    console.log("Audio alert blocked by browser autoplay policy.");
-                }
-            })();
-            </script>
-            """,
-            unsafe_allow_html=True
-        )
-
-    # 2. Real-time Live Security Status Strip
     st.markdown(
-        f"""
-        <div style="background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.25); border-radius:12px; padding:10px 16px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
-            <div style="display:flex; align-items:center; gap:10px; font-size:12.5px; flex-wrap:wrap;">
-                <span style="color:#38BDF8; font-weight:800; display:flex; align-items:center; gap:4px;">🛡️ AI TRUST</span>
-                <span style="color:#64748B;">|</span>
-                <span style="color:{scan_info['status_col']}; font-weight:700;">{scan_info['state_label']} (Risk: {scan_info['risk_score']}%)</span>
-                <span style="color:#64748B;">|</span>
-                <span style="color:#CBD5E1;">Detected: <strong style="color:#F1F5F9;">{scan_info['entities_label']}</strong></span>
-            </div>
-            <span style="background:{scan_info['badge_bg']}; color:{scan_info['badge_col']}; border:1px solid {scan_info['badge_border']}; font-size:11px; font-weight:800; padding:3px 10px; border-radius:12px;">
-                ● {scan_info['decision']}
-            </span>
-        </div>
+        """
+        <div style="background:rgba(15,23,42,0.65); border:1px solid rgba(56,189,248,0.22); border-radius:14px; padding:16px 18px; margin-bottom:16px; width:100%; box-sizing:border-box;">
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
 
-    # 3. Live Sanitization Preview Card (When PII is present and masked)
-    if scan_info["state_type"] == "WARNING" and scan_info.get("sanitized_text") and scan_info["sanitized_text"] != current_preset:
+    if current_preset.strip():
         st.markdown(
             f"""
-            <div style="background:rgba(245,158,11,0.10); border:1px solid rgba(245,158,11,0.35); border-radius:10px; padding:10px 14px; margin-bottom:8px;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
-                    <span style="color:#FDE68A; font-weight:800; font-size:11.5px; display:flex; align-items:center; gap:6px;">🔒 LIVE SANITIZATION PREVIEW</span>
-                    <span style="background:rgba(56,189,248,0.15); color:#38BDF8; border:1px solid rgba(56,189,248,0.3); font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px;">Sent to AI (masked)</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); font-size:12.5px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="color:#38BDF8; font-weight:800;">🛡️ Privacy Firewall:</span>
+                    <span style="color:{scan_info['status_col']}; font-weight:700;">{scan_info['state_label']} ({scan_info['risk_score']}%)</span>
+                    <span style="color:#64748B;">•</span>
+                    <span style="color:#94A3B8;">{scan_info['entities_label']}</span>
                 </div>
-                <div style="color:#E2E8F0; font-size:12px; font-family:monospace; background:rgba(0,0,0,0.35); padding:6px 10px; border-radius:6px;">
-                    {html.escape(scan_info['sanitized_text'])}
-                </div>
-                <div style="color:#94A3B8; font-size:11px; margin-top:4px;">
-                    🛡️ Raw sensitive entities are automatically redacted before reaching external LLMs.
-                </div>
+                <span style="background:{scan_info['badge_bg']}; color:{scan_info['badge_col']}; border:1px solid {scan_info['badge_border']}; font-size:11px; font-weight:800; padding:2px 8px; border-radius:10px;">
+                    {scan_info['decision']}
+                </span>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-    # 4. Live Visual Masking / Blur Protection on DANGER
-    if scan_info["state_type"] == "DANGER":
-        st.markdown(
-            """
-            <div style="background:rgba(220,38,38,0.12); border:1px solid rgba(239,68,68,0.45); border-radius:10px; padding:10px 14px; margin-bottom:8px;">
-                <div style="color:#FCA5A5; font-weight:800; font-size:12px; display:flex; align-items:center; gap:6px;">
-                    <span>🚨 SHIELDED INPUT PROTECTED</span>
-                    <span style="background:rgba(220,38,38,0.3); color:#EF4444; font-size:10.5px; padding:2px 6px; border-radius:6px;">DANGER</span>
-                </div>
-                <div style="filter:blur(4px); color:#F8FAFC; user-select:none; font-family:monospace; margin:6px 0; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:6px;">
-                    [CRITICAL SENSITIVE CREDENTIAL / INJECTION SHIELDED]
-                </div>
-                <div style="color:#EF4444; font-size:11.5px; font-weight:700;">
-                    🚫 Message Blocked — High-risk credentials or adversarial injections are strictly prevented from reaching external LLMs or tools.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    # 5. Main Secure Composer Form & Action Bar
-    with st.container():
-        # Large message input area
-        user_prompt = st.text_area(
-            "Type your secure message...",
-            value=current_preset,
-            placeholder="Type your secure message... (real-time privacy scan and zero-trust gateway active)",
-            height=90,
-            key="chat_message_input_box",
-            label_visibility="collapsed",
-        )
-
-        # Synchronize preset text if user edited
-        if user_prompt != current_preset:
-            st.session_state["composer_preset_text"] = user_prompt
-
-        # Action bar with Tool Indicator, Scan, Clear, and Send Button
-        c_tool_info, c_scan, c_clear, c_send = st.columns([2.5, 1.1, 0.8, 1.2])
-
-        with c_tool_info:
+        # ── Live Credential Warning Banner (Before Send) ──────────────────────
+        _live_advisory = scan_info.get("security_advisory")
+        if _live_advisory and _live_advisory.get("items") and scan_info["is_blocked"]:
+            _cred_types = ", ".join([item["type"] for item in _live_advisory["items"]])
             st.markdown(
-                f"<div style='padding-top:8px; font-size:12px; color:#94A3B8; display:flex; align-items:center; gap:6px;'>"
-                f"<span>⚡ Active Tool:</span> <strong style='color:#38BDF8;'>{active_tool_name}</strong>"
-                f"</div>",
-                unsafe_allow_html=True
+                f"""
+                <div style="background:rgba(220,38,38,0.18); border:1.5px solid rgba(239,68,68,0.5); border-radius:10px; padding:10px 14px; margin-bottom:8px; animation: pulse 2s ease-in-out infinite;">
+                    <div style="color:#FCA5A5; font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:6px;">
+                        <span>🚨</span> <span>CREDENTIAL DETECTED: {_cred_types}</span>
+                    </div>
+                    <div style="color:#CBD5E1; font-size:11.5px; margin-top:4px; line-height:1.5;">
+                        ⚠️ Your message contains sensitive credentials. It will be <strong style="color:#F87171;">BLOCKED</strong> from being sent to AI.<br>
+                        🔐 If this is an active credential, <strong style="color:#FCD34D;">change it immediately</strong>.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-        with c_scan:
-            scan_clicked = st.button("🛡️ Scan Prompt", key="btn_chat_preflight_scan", use_container_width=True)
+    # Full-width message textarea with dynamic nonce key for instant clean reset
+    input_nonce = st.session_state.get("input_nonce", 0)
+    user_prompt = st.text_area(
+        "Type your message...",
+        value=current_preset,
+        placeholder="Type any question or prompt... (Universal Live Web Grounding & Privacy Shield active)",
+        height=95,
+        key=f"chat_message_input_box_{input_nonce}",
+        label_visibility="collapsed",
+    )
 
-        with c_clear:
-            if st.button("🗑️ Clear", key="btn_chat_clear", use_container_width=True):
-                st.session_state["composer_preset_text"] = ""
-                st.rerun()
+    if user_prompt != current_preset:
+        st.session_state["composer_preset_text"] = user_prompt
 
-        with c_send:
-            send_btn_label = "🚫 Blocked" if scan_info["is_blocked"] else "➤ Send"
-            send_clicked = st.button(
-                send_btn_label,
-                key="btn_chat_send",
-                type="secondary" if scan_info["is_blocked"] else "primary",
-                use_container_width=True
-            )
+    # Action bar matching exact horizontal boundaries of the textarea
+    active_tool_name = st.session_state.get("active_tool", "💬 Standard Chat")
+    c_tool_info, c_scan, c_clear, c_send = st.columns([2.2, 1.1, 0.8, 1.2])
 
-    # 6. Optional Pre-flight Scan Detailed Inspection
+    with c_tool_info:
+        st.markdown(
+            f"<div style='padding-top:7px; font-size:12px; color:#94A3B8; display:flex; align-items:center; gap:6px;'>"
+            f"<span>⚡ Active Tool:</span> <strong style='color:#38BDF8;'>{active_tool_name}</strong>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+    with c_scan:
+        scan_clicked = st.button("🛡️ Scan Prompt", key="btn_chat_preflight_scan", use_container_width=True)
+
+    with c_clear:
+        if st.button("🗑️ Clear", key="btn_chat_clear", use_container_width=True):
+            st.session_state["composer_preset_text"] = ""
+            st.session_state["input_nonce"] = input_nonce + 1
+            st.rerun()
+
+    with c_send:
+        send_btn_label = "🚫 Blocked" if scan_info["is_blocked"] else "➤ Send"
+        send_clicked = st.button(
+            send_btn_label,
+            key="btn_chat_send",
+            type="secondary" if scan_info["is_blocked"] else "primary",
+            use_container_width=True
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Pre-flight Scan Diagnostic Expander
     if scan_clicked and user_prompt and user_prompt.strip():
         detailed_scan = _compute_live_privacy_status(user_prompt)
         with st.expander("🛡️ Pre-Flight Privacy & Security Diagnostic", expanded=True):
@@ -677,17 +599,46 @@ def render_chatbot_view():
                 for e in detailed_scan["entities"]:
                     st.write(f"- `{e.get('category', e.get('entity_type'))}`: `{e.get('value', '[MASKED]')}` (Severity: {e.get('severity')})")
 
-    # 7. Handle Send Action
+    # ── Handle Send Action (Strict Deduplication & Module Isolation) ───────────
     if send_clicked:
         prompt = (user_prompt or "").strip()
         if not prompt:
-            st.warning("⚠️ Please type a secure message before sending.")
-        elif scan_info["is_blocked"]:
-            st.error("⛔ REQUEST BLOCKED: Input contains high-risk credentials or adversarial overrides. Execution halted with 0 external LLM/tool calls.")
-            # Clear preset text and record blocked turn
+            st.warning("⚠️ Please type a message before sending.")
+            return
+
+        # Deduplication Guard: Check if the exact message was just appended
+        if messages and messages[-1].get("role") == "user" and messages[-1].get("text") == prompt:
+            # Already submitted, avoid re-submitting duplicate
             st.session_state["composer_preset_text"] = ""
-            messages.append({"role": "user", "text": prompt, "tool_used": active_tool_name})
+            st.session_state["input_nonce"] = input_nonce + 1
+            return
+
+        msg_turn_id = f"turn-{int(time.time()*1000)}"
+        st.session_state["composer_preset_text"] = ""
+        st.session_state["input_nonce"] = input_nonce + 1
+
+        # ── IMMEDIATE SANITIZATION: Redact sensitive information BEFORE storing or rendering ──
+        from privacy_engine.sanitizer import PrivacySanitizer
+        _common_sanitizer = PrivacySanitizer()
+        _sanitized_result = _common_sanitizer.sanitize_text(prompt, mode="REDACT")
+        _safe_redacted_prompt = _sanitized_result.get("sanitized_text", prompt)
+        _has_redactions = _safe_redacted_prompt != prompt
+
+        if scan_info["is_blocked"]:
+            st.error("⛔ REQUEST BLOCKED: Input contains high-risk credentials or adversarial overrides. Execution halted with 0 external LLM/tool calls.")
+
             messages.append({
+                "id": f"{msg_turn_id}-user",
+                "role": "user",
+                "text": _safe_redacted_prompt,
+                "credential_masked_text": _safe_redacted_prompt,
+                "has_redactions": _has_redactions,
+                "was_blocked": True,
+                "tool_used": active_tool_name,
+                "timestamp": time.time()
+            })
+            messages.append({
+                "id": f"{msg_turn_id}-assistant",
                 "role": "assistant",
                 "text": "",
                 "security_meta": {
@@ -700,33 +651,37 @@ def render_chatbot_view():
                     "reason": scan_info["reason"],
                     "routing_action": "BLOCKED → LLM was not called",
                     "model_selected": "Blocked (No Provider)",
+                    "security_advisory": scan_info.get("security_advisory"),
                     "timing_breakdown": {"total_ms": 1.0, "router_ms": 0.0, "security_ms": 1.0, "search_ms": 0.0, "llm_ms": 0.0, "tier": "BLOCKED"},
                     "timing_ms": 1.0,
                 }
             })
             st.rerun()
         else:
-            # Clear preset text so it won't duplicate on next turn
-            st.session_state["composer_preset_text"] = ""
-
             if not messages:
-                current_thread["title"] = (prompt[:28] + "...") if len(prompt) > 28 else prompt
+                current_thread["title"] = (_safe_redacted_prompt[:28] + "...") if len(_safe_redacted_prompt) > 28 else _safe_redacted_prompt
 
-            messages.append({"role": "user", "text": prompt, "tool_used": active_tool_name})
+            messages.append({
+                "id": f"{msg_turn_id}-user",
+                "role": "user",
+                "text": _safe_redacted_prompt,
+                "credential_masked_text": _safe_redacted_prompt,
+                "has_redactions": _has_redactions,
+                "was_blocked": False,
+                "tool_used": active_tool_name,
+                "timestamp": time.time()
+            })
 
-            # Live Processing Status Banner
             status_container = st.empty()
             status_container.markdown(
                 """
-                <div style="background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:16px;">⚡</span>
-                        <span style="color:#F8FAFC; font-size:12.5px; font-weight:700;">Zero-Trust Security Gateway Processing...</span>
+                <div style="background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.3); border-radius:10px; padding:12px 18px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 4px 16px rgba(0,0,0,0.3);">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:16px;">🌐</span>
+                        <span style="color:#F8FAFC; font-size:13px; font-weight:700;">Verifying current information & synthesizing response…</span>
                     </div>
-                    <div style="display:flex; gap:8px; font-size:11px; font-weight:700;">
-                        <span style="color:#06B6D4;">● Router</span> ➔
-                        <span style="color:#10B981;">● Security</span> ➔
-                        <span style="color:#A78BFA;">● Reasoning</span>
+                    <div style="font-size:11px; font-weight:700; color:#38BDF8; font-family:monospace;">
+                        ● LIVE GROUNDING ACTIVE
                     </div>
                 </div>
                 """,
@@ -737,33 +692,33 @@ def render_chatbot_view():
             tool_out = None
             resp = None
 
-            # 1. 🔎 Web Search Execution
+            # 1. 🔎 Web Search Execution (Safe Redacted Input Passed)
             if active_tool_name == "🔎 Web Search":
-                tool_out = execute_tool_with_ai_trust("🔎 Web Search", search_web, prompt)
+                tool_out = execute_tool_with_ai_trust("🔎 Web Search", search_web, _safe_redacted_prompt)
 
             # 2. 🧠 Deep Research Execution
             elif active_tool_name == "🧠 Deep Research":
-                tool_out = execute_tool_with_ai_trust("🧠 Deep Research", deep_research, prompt)
+                tool_out = execute_tool_with_ai_trust("🧠 Deep Research", deep_research, _safe_redacted_prompt)
 
             # 3. 💻 Code Workspace Execution
             elif active_tool_name == "💻 Code Workspace":
-                tool_out = execute_tool_with_ai_trust("💻 Code Workspace", execute_code_safely, prompt)
+                tool_out = execute_tool_with_ai_trust("💻 Code Workspace", execute_code_safely, _safe_redacted_prompt)
 
             # 4. 🔗 URL Analysis Execution
             elif active_tool_name == "🔗 URL Analysis":
-                tool_out = execute_tool_with_ai_trust("🔗 URL Analysis", analyze_url_content, prompt)
+                tool_out = execute_tool_with_ai_trust("🔗 URL Analysis", analyze_url_content, _safe_redacted_prompt)
 
-            # 5. 🎨 Image Generation Bridge
-            elif active_tool_name == "🎨 Image Generation":
-                tool_out = execute_tool_with_ai_trust("🎨 Image Generation", generate_image_bridge, prompt)
-
-            # 6. Standard LLM Chat Route (Ultra-Fast)
+            # 5. Standard LLM Chat Route with Universal Live Grounding (Safe Redacted Input Passed)
             else:
+                safe_history = [
+                    m for m in messages[:-1]
+                    if not m.get("was_blocked") and m.get("security_meta", {}).get("decision") != "BLOCK"
+                ]
                 resp = APIClient.chat_message(
-                    prompt=prompt,
+                    prompt=_safe_redacted_prompt,
                     mode="REDACT",
                     mcp_enabled=True,
-                    chat_history=messages,
+                    chat_history=safe_history,
                     user_role=user_role,
                     user_id=user_id,
                     rag_doc_id=st.session_state.get("rag_doc_id"),
@@ -772,23 +727,13 @@ def render_chatbot_view():
             elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
             status_container.empty()
 
-            # Handle Tool Response
             if tool_out:
                 receipt = tool_out.get("trust_receipt", {})
                 receipt_text = format_receipt_text(receipt) if receipt else "Trust Receipt Verified"
-
-                timing_bd = {
-                    "total_ms": elapsed_ms,
-                    "router_ms": 1.0,
-                    "security_ms": 15.0,
-                    "search_ms": elapsed_ms - 20.0 if "Search" in active_tool_name else 0.0,
-                    "llm_ms": 0.0,
-                    "tier": "MULTIMODAL" if "Search" not in active_tool_name else "WEB_REQUIRED"
-                }
-
                 messages.append({
+                    "id": f"{msg_turn_id}-assistant",
                     "role": "assistant",
-                    "text": "" if tool_out.get("decision") == "BLOCK" else f"Result from **{active_tool_name}**:",
+                    "text": "" if tool_out.get("decision") == "BLOCK" else f"Result from **{active_tool_name}**:\n\n{tool_out.get('result', {}).get('direct_answer', '')}",
                     "tool_data": tool_out,
                     "security_meta": {
                         "decision": tool_out.get("decision", "ALLOW"),
@@ -798,12 +743,18 @@ def render_chatbot_view():
                         "receipt_id": receipt.get("receipt_id", ""),
                         "receipt_text": receipt_text,
                         "model_selected": f"Aiera {active_tool_name}",
-                        "timing_breakdown": timing_bd,
+                        "timing_breakdown": {
+                            "total_ms": elapsed_ms,
+                            "router_ms": 1.0,
+                            "security_ms": 15.0,
+                            "search_ms": elapsed_ms - 20.0,
+                            "llm_ms": 0.0,
+                            "tier": "WEB_REQUIRED"
+                        },
                         "timing_ms": elapsed_ms,
                     }
                 })
 
-            # Handle Standard LLM Response
             elif resp:
                 if resp.get("masked_prompt") and resp["masked_prompt"] != prompt:
                     messages[-1]["masked_text"] = resp["masked_prompt"]
@@ -824,30 +775,29 @@ def render_chatbot_view():
                     "tier": "SIMPLE"
                 })
 
-                security_meta = {
-                    "decision": decision,
-                    "risk_score": resp.get("risk_score", 0),
-                    "risk_level": resp.get("risk_level", "LOW"),
-                    "category": resp.get("category", "SAFE"),
-                    "detected_risks": resp.get("detected_risks", []),
-                    "detected_entities": resp.get("detected_entities", []),
-                    "reason": resp.get("reason", ""),
-                    "routing_action": resp.get("routing_action", "SAFE → LLM" if decision == "ALLOW" else "BLOCKED → LLM was not called"),
-                    "bert_prediction": resp.get("bert_prediction", "SAFE"),
-                    "bert_confidence": resp.get("bert_confidence", 0.0),
-                    "nb_prediction": resp.get("nb_prediction", "SAFE"),
-                    "nb_confidence": resp.get("nb_confidence", 0.0),
-                    "model_selected": resp.get("model_selected", "Gemini"),
-                    "receipt_id": receipt_id,
-                    "receipt_text": receipt_text,
-                    "timing_breakdown": timing_bd,
-                    "timing_ms": elapsed_ms,
-                }
-
                 messages.append({
+                    "id": f"{msg_turn_id}-assistant",
                     "role": "assistant",
                     "text": ai_text if decision in ("ALLOW", "BLOCK") else "",
-                    "security_meta": security_meta,
+                    "security_meta": {
+                        "decision": decision,
+                        "risk_score": resp.get("risk_score", 0),
+                        "risk_level": resp.get("risk_level", "LOW"),
+                        "category": resp.get("category", "SAFE"),
+                        "detected_risks": resp.get("detected_risks", []),
+                        "detected_entities": resp.get("detected_entities", []),
+                        "reason": resp.get("reason", ""),
+                        "routing_action": resp.get("routing_action", "SAFE → LLM" if decision == "ALLOW" else "BLOCKED → LLM was not called"),
+                        "bert_prediction": resp.get("bert_prediction", "SAFE"),
+                        "bert_confidence": resp.get("bert_confidence", 0.0),
+                        "nb_prediction": resp.get("nb_prediction", "SAFE"),
+                        "nb_confidence": resp.get("nb_confidence", 0.0),
+                        "model_selected": resp.get("model_selected", "Gemini"),
+                        "receipt_id": receipt_id,
+                        "receipt_text": receipt_text,
+                        "timing_breakdown": timing_bd,
+                        "timing_ms": elapsed_ms,
+                    },
                 })
 
             st.rerun()

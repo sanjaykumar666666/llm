@@ -8,10 +8,23 @@ Dual-Theme Design System:
 - 100% Shared Component Hierarchy, Layout, Charts, Numbers, Animations, and Zero Data Reset
 """
 
+import base64
+from pathlib import Path
 from typing import Dict, Any, List
 import streamlit as st
 
 from backend.logger import get_all_logs, get_audit_summary_metrics
+
+
+def _get_logo_b64() -> str:
+    logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo.png"
+    if logo_path.exists():
+        try:
+            with open(logo_path, "rb") as f:
+                return f"data:image/png;base64,{base64.b64encode(f.read()).decode('utf-8')}"
+        except Exception:
+            pass
+    return ""
 
 
 def _render_html(raw_html: str) -> None:
@@ -115,35 +128,40 @@ def render_dashboard_view() -> None:
 
     # ── 3. DASHBOARD HEADER ON ONE SEAMLESS LINE ──────────────────────────────
     head_col_left, head_col_status, head_col_t1, head_col_t2 = st.columns([3.8, 3.8, 1.2, 1.2])
+    logo_b64 = _get_logo_b64()
+    logo_img_tag = f"""<img src="{logo_b64}" style="width:38px; height:38px; border-radius:9px; object-fit:contain; box-shadow:0 0 16px rgba(56,189,248,0.4); border:1px solid rgba(56,189,248,0.3); flex-shrink:0;" alt="Logo" />""" if logo_b64 else ""
 
     with head_col_left:
         _render_html(
             f"""
-            <div>
-                <h1 style="
-                    color:{T['title_color']}; font-size:32px; font-weight:900;
-                    letter-spacing:-0.8px; margin:0 0 4px 0;
-                    display:flex; align-items:center; gap:10px;
-                ">
-                    Dashboard
-                    <span style="
-                        font-size:18px;
-                        background: linear-gradient(135deg, #06B6D4, #8B5CF6);
-                        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                        background-clip: text;
-                    ">✦</span>
-                </h1>
-                <div style="
-                    color:{T['text_muted']}; font-size:13px; font-weight:600;
-                    letter-spacing:0.3px; display:flex; align-items:center; gap:6px; white-space:nowrap;
-                ">
-                    AI Security
-                    <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
-                    Privacy
-                    <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
-                    Trust
-                    <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
-                    Intelligence
+            <div style="display:flex; align-items:center; gap:12px;">
+                {logo_img_tag}
+                <div>
+                    <h1 style="
+                        color:{T['title_color']}; font-size:30px; font-weight:900;
+                        letter-spacing:-0.8px; margin:0 0 2px 0;
+                        display:flex; align-items:center; gap:8px;
+                    ">
+                        Dashboard
+                        <span style="
+                            font-size:16px;
+                            background: linear-gradient(135deg, #06B6D4, #8B5CF6);
+                            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+                            background-clip: text;
+                        ">✦</span>
+                    </h1>
+                    <div style="
+                        color:{T['text_muted']}; font-size:12.5px; font-weight:600;
+                        letter-spacing:0.3px; display:flex; align-items:center; gap:6px; white-space:nowrap;
+                    ">
+                        AI Security
+                        <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
+                        Privacy
+                        <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
+                        Trust
+                        <span style="color:{T['text_muted']}; opacity:0.5;">•</span>
+                        Intelligence
+                    </div>
                 </div>
             </div>
             """

@@ -39,8 +39,5 @@ ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 ALLOWED_DOCUMENT_EXTENSIONS = {".pdf", ".txt", ".csv", ".json", ".md", ".log"}
 
 # Default Gemini Models
-DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gemini-3.6-flash")
+DEFAULT_LLM_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", "gemini-3.5-flash-lite")
 FALLBACK_LLM_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-flash-latest"]
-
-
-

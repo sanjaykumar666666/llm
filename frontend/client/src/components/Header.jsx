@@ -5,9 +5,12 @@ export function Header({ theme, toggleTheme, onOpenAbout }) {
   return (
     <header className="app-header">
       <div className="brand-section">
-        <div className="brand-logo">
-          <ShieldAlert size={22} />
-        </div>
+        <img 
+          src="/logo.png" 
+          alt="AIERA Shield Logo" 
+          className="brand-logo" 
+          style={{ width: '38px', height: '38px', objectFit: 'contain', borderRadius: '10px' }}
+        />
         <div>
           <h1 className="brand-title">AIERA Shield Firewall</h1>
           <p className="brand-subtitle">

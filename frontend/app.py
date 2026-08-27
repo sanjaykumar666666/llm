@@ -12,10 +12,11 @@ import streamlit as st
 # Add project root to path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# Page Configuration — Aiera AI
+# Page Configuration — AI Privacy Shield
+logo_path = Path(__file__).resolve().parent / "assets" / "logo.png"
 st.set_page_config(
-    page_title="Aiera AI — Privacy-Aware AI Workspace",
-    page_icon="🛡️",
+    page_title="AI Privacy Shield — Multimodal Security Gateway",
+    page_icon=str(logo_path) if logo_path.exists() else "🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
 )

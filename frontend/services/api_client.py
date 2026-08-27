@@ -101,18 +101,22 @@ class APIClient:
         return cls._mock_explainability_response(modality)
 
     @classmethod
-    def analyze_text(cls, text: str, mode: str = "REDACT") -> Dict[str, Any]:
-        """Module 2 & General Text Analysis API endpoint."""
+    def analyze_text(cls, text: str, mode: str = "REDACT", fact_check_mode: bool = False) -> Dict[str, Any]:
+        """Module 2: High-Performance Comprehensive Text Analysis API endpoint."""
         try:
-            res = requests.post(
-                f"{BACKEND_API_URL}/analyze/text",
-                json={"text": text, "sanitization_mode": mode},
-                timeout=3.0
-            )
-            if res.status_code == 200:
-                return res.json()
+            from backend.services.text_analysis_engine import analyze_text_comprehensive
+            return analyze_text_comprehensive(text, fact_check_mode=fact_check_mode)
         except Exception:
-            pass
+            try:
+                res = requests.post(
+                    f"{BACKEND_API_URL}/analyze/text",
+                    json={"text": text, "sanitization_mode": mode, "fact_check_mode": fact_check_mode},
+                    timeout=4.0
+                )
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
 
         return cls._mock_text_analysis(text, mode)
 

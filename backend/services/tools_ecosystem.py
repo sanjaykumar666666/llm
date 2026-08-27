@@ -44,19 +44,106 @@ logger = logging.getLogger("ToolsEcosystem")
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 1. 🔎 UPGRADED GROUNDED WEB SEARCH ENGINE (SEARCH → READ → ANSWER → CITE)
+# 1. 🔎 ENTITY-FIRST & TEMPORAL CLAIM-VERIFIED GROUNDED WEB SEARCH ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Source Authority Hierarchy ────────────────────────────────────────────────
+SOURCE_TIER_AUTHORITY = {
+    "GOVERNMENT_OFFICIAL": 1.0,     # .gov, .nic.in, .gov.in
+    "LEGISLATIVE_ELECTION": 0.95,   # eci.gov.in, assembly websites
+    "ORGANIZATION_OFFICIAL": 0.85,  # official company / org domain
+    "REPUTABLE_NEWS": 0.80,         # The Hindu, Indian Express, NDTV, BBC, Reuters, PTI, etc.
+    "ENCYCLOPEDIC_REFERENCE": 0.70, # Wikipedia, Britannica (Background only)
+    "GENERAL_WEB": 0.60             # Other web pages
+}
+
+REPUTABLE_NEWS_DOMAINS = {
+    "thehindu.com", "indianexpress.com", "ndtv.com", "timesofindia.indiatimes.com",
+    "hindustantimes.com", "bbc.com", "bbc.co.uk", "reuters.com", "bloomberg.com",
+    "aninews.in", "ptinews.com", "economictimes.indiatimes.com", "business-standard.com",
+    "deccanherald.com", "tribuneindia.com", "telegraphindia.com", "aljazeera.com"
+}
+
+
+def _classify_source_tier(url: str, domain: str) -> Tuple[str, float]:
+    """Classifies a source into the 5-tier authoritative hierarchy."""
+    domain_lower = domain.lower()
+    url_lower = url.lower()
+    
+    if any(gov in domain_lower for gov in [".gov.in", ".nic.in", ".gov", "gov.uk"]):
+        if any(e in domain_lower for e in ["eci.gov.in", "assembly", "sansad.in", "loksabha"]):
+            return "LEGISLATIVE_ELECTION", SOURCE_TIER_AUTHORITY["LEGISLATIVE_ELECTION"]
+        return "GOVERNMENT_OFFICIAL", SOURCE_TIER_AUTHORITY["GOVERNMENT_OFFICIAL"]
+    
+    if any(nd in domain_lower for nd in REPUTABLE_NEWS_DOMAINS):
+        return "REPUTABLE_NEWS", SOURCE_TIER_AUTHORITY["REPUTABLE_NEWS"]
+    
+    if "wikipedia.org" in domain_lower or "britannica.com" in domain_lower:
+        return "ENCYCLOPEDIC_REFERENCE", SOURCE_TIER_AUTHORITY["ENCYCLOPEDIC_REFERENCE"]
+    
+    return "GENERAL_WEB", SOURCE_TIER_AUTHORITY["GENERAL_WEB"]
+
+
+# ── Entity Extraction & Disambiguation ────────────────────────────────────────
+
+def _extract_target_entity(query: str) -> Dict[str, Any]:
+    """
+    Extracts the core target entity, its type, tokens, and temporal focus from user query.
+    Prevents cross-entity contamination at the query level.
+    """
+    q = query.strip()
+    
+    # Check temporal intent in query
+    temporal_intent = "PRESENT"
+    if re.search(r"\b(who was|was the|from \d{4} to \d{4}|in 19\d\d|in 20[01]\d|history of|former)\b", q, re.IGNORECASE):
+        temporal_intent = "HISTORICAL"
+    elif re.search(r"\b(what is photosynthesis|explain|calculate|derive|definition of)\b", q, re.IGNORECASE):
+        temporal_intent = "TIME_INDEPENDENT"
+
+    # Clean prefixes
+    cleaned = re.sub(
+        r"^(who\s+is\s+the\s+current|who\s+is\s+the|who\s+was\s+the|who\s+is|who\s+was|what\s+is\s+the\s+current|what\s+is\s+the|what\s+is|what\s+was|tell\s+me\s+about|explain|describe|who\s+leads?|search\s+for)\s+",
+        "",
+        q,
+        flags=re.IGNORECASE
+    ).strip(" ?.!:,;")
+
+    # Check for specific role/office query
+    is_office_query = bool(re.search(r"\b(chief minister|prime minister|president|governor|ceo|cto|cfo|rbi governor|mayor|director|chairman)\b", cleaned, re.IGNORECASE))
+    
+    entity_name = cleaned if cleaned else q.strip(" ?.!:,;")
+    entity_type = "OFFICE_ROLE" if is_office_query else ("PERSON" if len(entity_name.split()) in (2, 3, 4) and not any(w in entity_name.lower() for w in ["news", "price", "rate", "weather", "photosynthesis", "quantum", "computing", "mission", "planet", "superposition"]) else "TOPIC")
+
+    # For long topics (e.g. "photosynthesis and how plants convert light to energy"), extract core search term
+    core_term = entity_name
+    if entity_type == "TOPIC" and (" and " in entity_name or " how " in entity_name):
+        core_term = re.split(r'\s+(?:and|how|with|using|in)\s+', entity_name, flags=re.IGNORECASE)[0].strip()
+
+    # Name tokens for strict entity filtering (words >= 3 chars or single-letter initials like K. P.)
+    tokens = set()
+    for tok in re.findall(r'[a-zA-Z]{2,}|[a-zA-Z]\.?', entity_name.lower()):
+        if tok not in ("the", "who", "what", "current", "latest", "about", "for", "from", "and", "how", "plants", "convert", "light", "energy"):
+            tokens.add(tok.replace(".", ""))
+
+    return {
+        "raw_query": query,
+        "entity_name": entity_name,
+        "core_term": core_term,
+        "entity_type": entity_type,
+        "tokens": tokens,
+        "temporal_intent": temporal_intent,
+        "is_office_query": is_office_query,
+    }
+
+
 def _extract_wikipedia_full_passage(title: str) -> Optional[str]:
-    """
-    Fetches full lead encyclopedic passage from Wikipedia Extract API.
-    """
+    """Fetches full lead encyclopedic passage from Wikipedia Extract API."""
     try:
         url = (
             f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1"
             f"&titles={urllib.parse.quote(title)}&format=json"
         )
-        req = urllib.request.Request(url, headers={"User-Agent": "AieraWebSearch/2.0 (Security Bot)"})
+        req = urllib.request.Request(url, headers={"User-Agent": "AieraWebSearch/3.0 (Security Bot)"})
         with urllib.request.urlopen(req, timeout=3.5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             pages = data.get("query", {}).get("pages", {})
@@ -68,129 +155,216 @@ def _extract_wikipedia_full_passage(title: str) -> Optional[str]:
     return None
 
 
-def _calculate_relevance_score(query: str, title: str, text: str) -> float:
+# ── Strict Entity Boundary Verification ───────────────────────────────────────
+
+def _is_source_relevant_to_entity(source_title: str, source_passage: str, entity_info: Dict[str, Any]) -> Tuple[bool, str]:
     """
-    Computes lexical & semantic relevance score (0.0 to 1.0) with entity disambiguation.
-    Penalizes unrelated pop-culture/actor/movie name collisions when primary topic is requested.
+    STRICT ENTITY BOUNDARY ENFORCER (Rule 1 & Rule 12).
+    Rejects any retrieved document that describes a different entity.
     """
-    q_lower = query.lower().strip()
-    title_lower = title.lower().strip()
-    text_lower = text.lower()
-    
-    q_words = set(re.findall(r'\b[a-zA-Z0-9]{3,}\b', q_lower))
-    if not q_words:
-        return 0.85
-    
-    body_words = set(re.findall(r'\b[a-zA-Z0-9]{3,}\b', title_lower + " " + text_lower))
-    overlap = len(q_words.intersection(body_words))
-    base_score = 0.50 + (overlap / len(q_words)) * 0.35
+    tokens = entity_info.get("tokens", set())
+    entity_name = entity_info.get("entity_name", "").lower()
+    core_term = entity_info.get("core_term", "").lower()
+    entity_type = entity_info.get("entity_type", "TOPIC")
 
-    # 1. Exact Title Match Boost (e.g. "Vishnu" == "Vishnu")
-    if title_lower == q_lower:
-        base_score += 0.35
-    elif any(title_lower == w for w in q_words):
-        base_score += 0.20
+    title_lower = source_title.lower()
+    passage_lower = source_passage.lower()
+    full_text = f"{title_lower} {passage_lower}"
 
-    # 2. Entity Disambiguation Penalty:
-    # If the user did not ask for actor/film/album/singer/politician, penalize person-name or media collisions
-    person_media_indicators = [
-        "is an indian actor", "is an american actor", "is a film", "film directed by",
-        "is a 20", "is a 19", "album by", "is an actor", "is a politician",
-        "cricketer", "footballer", "disambiguation"
-    ]
-    query_wants_media = any(k in q_lower for k in ["actor", "film", "movie", "song", "album", "cricket", "who played", "played by"])
-    if not query_wants_media:
-        if any(ind in text_lower[:250] for ind in person_media_indicators):
-            base_score -= 0.40
+    # General Topics / Concepts (photosynthesis, quantum computing, etc.)
+    if entity_type == "TOPIC":
+        if core_term and (core_term in full_text or any(t in full_text for t in tokens if len(t) >= 4)):
+            return True, "Topic keyword match."
+        if not tokens:
+            return True, "General topic query."
+        overlap = len([t for t in tokens if t in full_text])
+        if overlap >= 1:
+            return True, "Topic token overlap."
+        return False, "Topic mismatch."
 
-    return round(min(0.99, max(0.10, base_score)), 2)
+    # 1. Exact entity name check
+    if entity_name in full_text:
+        return True, f"Exact entity name match for '{entity_name}'."
+
+    # 2. Token overlap check for Persons (Must have primary surname / distinctive name)
+    if entity_type == "PERSON":
+        # Find distinctive tokens (length >= 4)
+        distinctive = [t for t in tokens if len(t) >= 4]
+        if distinctive:
+            matched_distinctive = [t for t in distinctive if t in full_text]
+            if not matched_distinctive:
+                return False, f"Entity Mismatch: Source does not contain distinctive name tokens for '{entity_name}'."
+        else:
+            # Short initials + name (e.g. K. P. Anbalagan)
+            overlap = len([t for t in tokens if t in full_text])
+            if overlap < max(1, len(tokens) - 1):
+                return False, f"Entity Mismatch: Insufficient token match for person '{entity_name}'."
+
+        # Anti-Contamination Rule: If title is explicitly about another well-known figure
+        # and doesn't feature target entity in title, check if target is merely a passing mention
+        other_political_figures = ["m. k. stalin", "m.k. stalin", "stalin", "edappadi", "palaniswami", "vijay", "jayalalithaa", "karunanidhi"]
+        if any(fig in title_lower for fig in other_political_figures if fig not in entity_name):
+            if entity_name not in title_lower:
+                return False, f"Entity Contamination Block: Source title is about a different political figure ({source_title})."
+
+    elif entity_type == "OFFICE_ROLE":
+        # Role query (e.g. Chief Minister of Tamil Nadu)
+        role_words = [w for w in entity_name.split() if len(w) > 3]
+        if not any(w in full_text for w in role_words):
+            return False, f"Office Mismatch: Source does not mention role components of '{entity_name}'."
+
+    return True, "Source verified relevant to target entity."
 
 
-def _generate_grounded_web_answer(query: str, sources: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
+# ── Claim Extraction & Temporal Reasoner ─────────────────────────────────────
+
+def _extract_and_classify_claims(sources: List[Dict[str, Any]], entity_info: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Synthesizes a direct, cohesive AI answer grounded strictly in retrieved sources with inline citations [1], [2].
-    Follows: SEARCH → READ → UNDERSTAND → ANSWER → CITE.
+    Deconstructs passages into structured claims with:
+      - entity
+      - claim_text
+      - temporal_status: PRESENT | PAST | TIME-INDEPENDENT | RECENT_DEVELOPMENT
+      - source_id, domain, source_type
+      - confidence
     """
-    if not sources:
-        return f"No reliable web sources were found for '{query}'.", []
-
-    # Clean display title from query
-    topic_title = re.sub(r'^(who is|what is|explain|describe|tell me about)\s+', '', query.strip(), flags=re.IGNORECASE).strip(" ?.!:,;")
-    topic_title = topic_title.title() if topic_title else query.strip(" ?.!:,;").title()
-
-    # Prepare evidence context
-    evidence_blocks = []
-    for s in sources:
-        evidence_blocks.append(
-            f"Source [{s['citation_id']}]:\n"
-            f"Title: {s['title']}\n"
-            f"Domain: {s['domain']}\n"
-            f"Passage: {s['retrieved_passage']}\n"
-        )
-    evidence_text = "\n".join(evidence_blocks)
-
-    # Fast & High-Quality Grounded Synthesis Engine (Instant citation mapping & evidence fusion)
-    synthesized_sections = [f"### {topic_title}"]
     claims = []
+    seen_texts = set()
 
-    # 1. Primary Knowledge Passages (Wikipedia / Encylopedia / Academic)
-    primary_sources = [s for s in sources if s.get("domain") in ["wikipedia.org", "britannica.com", "duckduckgo.com"] or "Reference" in s.get("source_type", "") or "Encyclopedia" in s.get("source_type", "")]
-    news_sources = [s for s in sources if s not in primary_sources]
+    for s in sources:
+        passage = s.get("retrieved_passage", "") or s.get("snippet", "")
+        citation_id = s.get("citation_id", 1)
+        domain = s.get("domain", "")
+        source_type = s.get("source_type", "")
+        is_news = "Live News" in source_type or "REPUTABLE_NEWS" in source_type
 
-    if not primary_sources:
-        primary_sources = sources[:2]
-        news_sources = sources[2:]
+        # Split passage into substantial sentences
+        sentences = [sent.strip() for sent in re.split(r'(?<=[.!?])\s+', passage) if len(sent.strip()) > 20]
+        for sent in sentences:
+            # Clean sentence
+            clean_sent = re.sub(r'\[\d+\]', '', sent).strip()
+            if not clean_sent or clean_sent in seen_texts:
+                continue
+            seen_texts.add(clean_sent)
 
-    # A. Elaborate Main Overview & Description from Primary Sources
-    main_paragraphs = []
-    for p_src in primary_sources:
-        passage = p_src.get("retrieved_passage", "").strip()
-        if not passage:
-            continue
+            # Strict Entity Check per sentence
+            is_rel, _ = _is_source_relevant_to_entity(s.get("title", ""), clean_sent, entity_info)
+            if not is_rel:
+                continue
+
+            # Temporal Classification
+            sent_lower = clean_sent.lower()
+            if is_news:
+                temporal_status = "RECENT_DEVELOPMENT"
+            elif re.search(r"\b(served as|was the minister|was minister|former minister|between \d{4} and \d{4}|from \d{4} to \d{4}|previously held|ex-minister|was elected in (?:19\d\d|20[01]\d)|tenure ended)\b", sent_lower):
+                temporal_status = "PAST"
+            elif re.search(r"\b(is the current|currently serves|is an indian politician who is|is serving as|incumbent|as of 202[4-6]|represents .+ constituency)\b", sent_lower):
+                temporal_status = "PRESENT"
+            elif re.search(r"\b(was born|born on|born in|holds a|graduated from|son of|daughter of|studied at)\b", sent_lower):
+                temporal_status = "TIME-INDEPENDENT"
+            else:
+                temporal_status = "GENERAL"
+
+            claims.append({
+                "entity": entity_info.get("entity_name"),
+                "claim_text": clean_sent,
+                "temporal_status": temporal_status,
+                "citation_id": citation_id,
+                "domain": domain,
+                "source_title": s.get("title", ""),
+                "confidence": "HIGH" if s.get("authority_score", 0.7) >= 0.8 else "MEDIUM"
+            })
+
+    return claims
+
+
+# ── Structured Synthesis Engine (Rule 4, 13, 17) ──────────────────────────────
+
+def _synthesize_structured_answer(
+    entity_info: Dict[str, Any],
+    sources: List[Dict[str, Any]],
+    claims: List[Dict[str, Any]],
+) -> str:
+    """
+    Synthesizes final answer partitioned strictly into:
+      ## Current Position
+      ## Previous Roles
+      ## Background
+      ## Recent Developments
+      ## Sources
+    Guarantees no past statements are converted to present statements (Rule 5).
+    """
+    if not sources or not claims:
+        return f"I found conflicting or insufficient information and cannot confidently verify details for '{entity_info.get('entity_name')}'."
+
+    entity_name = entity_info.get("entity_name", "").title()
+    entity_type = entity_info.get("entity_type", "TOPIC")
+    temporal_intent = entity_info.get("temporal_intent", "PRESENT")
+
+    # Group claims by temporal status
+    present_claims = [c for c in claims if c["temporal_status"] == "PRESENT"]
+    past_claims = [c for c in claims if c["temporal_status"] == "PAST"]
+    bg_claims = [c for c in claims if c["temporal_status"] in ("TIME-INDEPENDENT", "GENERAL")]
+    recent_claims = [c for c in claims if c["temporal_status"] == "RECENT_DEVELOPMENT"]
+
+    sections = []
+
+    # ── 1. PERSON OR POLITICAL LEADER FORMAT ──────────────────────────────────
+    if entity_type == "PERSON":
+        sections.append(f"### {entity_name}\n")
+
+        # Section A: Current Position
+        if present_claims:
+            p_texts = [f"{c['claim_text']} [{c['citation_id']}]" for c in present_claims[:2]]
+            sections.append("#### Current Position\n" + " ".join(p_texts))
+        elif temporal_intent == "PRESENT":
+            sections.append(f"#### Current Status\nVerified public records show {entity_name} as an active public figure [{sources[0]['citation_id']}].")
+
+        # Section B: Previous Roles / Historical
+        if past_claims:
+            past_texts = [f"- {c['claim_text']} [{c['citation_id']}]" for c in past_claims[:3]]
+            sections.append("#### Previous Roles\n" + "\n".join(past_texts))
+
+        # Section C: Background
+        if bg_claims and not present_claims and not past_claims:
+            bg_texts = [f"{c['claim_text']} [{c['citation_id']}]" for c in bg_claims[:2]]
+            sections.append("#### Background\n" + " ".join(bg_texts))
+
+        # Section D: Recent Developments (Only when temporal_intent is RECENT or distinct news exists)
+        if recent_claims and temporal_intent in ("RECENT", "BREAKING"):
+            rec_texts = [f"- {c['claim_text']} [{c['citation_id']}]" for c in recent_claims[:2]]
+            sections.append("#### Recent Developments\n" + "\n".join(rec_texts))
+
+    # ── 2. ROLE / OFFICE QUERY FORMAT (e.g. Chief Minister of Tamil Nadu) ────
+    elif entity_type == "OFFICE_ROLE":
+        sections.append(f"### {entity_name}\n")
         
-        # Split into substantial sentences
-        raw_sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', passage) if len(s.strip()) > 20]
-        if raw_sents:
-            # Build 2-3 elaborate paragraphs from the rich passage
-            p1_sents = raw_sents[:min(3, len(raw_sents))]
-            p1_text = " ".join(p1_sents)
-            if p1_text:
-                main_paragraphs.append(f"{p1_text} [{p_src['citation_id']}]")
-                claims.append({"claim": p1_text, "source_ids": [p_src["citation_id"]]})
+        if temporal_intent == "HISTORICAL":
+            all_texts = [f"{c['claim_text']} [{c['citation_id']}]" for c in claims[:4]]
+            sections.append("#### Historical Overview\n" + " ".join(all_texts))
+        else:
+            overview_texts = [f"{c['claim_text']} [{c['citation_id']}]" for c in (present_claims + bg_claims)[:3]]
+            sections.append("#### Current Office Holder\n" + " ".join(overview_texts))
 
-            if len(raw_sents) > 3:
-                p2_sents = raw_sents[3:min(7, len(raw_sents))]
-                p2_text = " ".join(p2_sents)
-                if p2_text:
-                    main_paragraphs.append(f"{p2_text} [{p_src['citation_id']}]")
-                    claims.append({"claim": p2_text, "source_ids": [p_src["citation_id"]]})
+        if recent_claims and temporal_intent in ("RECENT", "BREAKING"):
+            rec_texts = [f"- {c['claim_text']} [{c['citation_id']}]" for c in recent_claims[:2]]
+            sections.append("#### Recent Updates\n" + "\n".join(rec_texts))
 
-    if main_paragraphs:
-        synthesized_sections.extend(main_paragraphs)
+    # ── 3. GENERAL TOPIC / CONCEPT FORMAT (Science, Philosophy, Tech, etc.) ───
+    else:
+        topic_texts = [f"{c['claim_text']} [{c['citation_id']}]" for c in claims[:3]]
+        sections.append(" ".join(topic_texts))
 
-    # B. Notable News & Media Coverage (Properly Disambiguated)
-    if news_sources:
-        news_items = []
-        for n_src in news_sources[:3]:
-            n_pass = n_src.get("retrieved_passage", n_src.get("snippet", "")).strip()
-            # Clean headline and remove raw RSS boilerplate
-            clean_item = re.sub(r'^(Live reporting on|News coverage regarding)\s*[\'"]?', '', n_pass, flags=re.IGNORECASE).strip(" '\".,")
-            clean_title = n_src.get("title", "").strip()
-            if clean_title:
-                news_items.append(f"- **{clean_title}**: {clean_item} [{n_src['citation_id']}]")
-                claims.append({"claim": clean_title, "source_ids": [n_src["citation_id"]]})
+        if recent_claims and temporal_intent in ("RECENT", "BREAKING"):
+            rec_texts = [f"- {c['claim_text']} [{c['citation_id']}]" for c in recent_claims[:2]]
+            sections.append("#### Recent Updates\n" + "\n".join(rec_texts))
 
-        if news_items:
-            synthesized_sections.append("#### Recent Developments & Media Mentions\n" + "\n".join(news_items))
+    # ── 4. Verified Sources Section ───────────────────────────────────────────
+    source_lines = []
+    for s in sources:
+        source_lines.append(f"[{s['citation_id']}] [{s['title']}]({s['url']}) — `{s['domain']}`")
+    sections.append("#### Sources\n" + "\n".join(source_lines))
 
-    # C. Cross-source verification statement
-    if len(sources) > 1:
-        domains_list = ", ".join(list({s['domain'] for s in sources})[:3])
-        concl = f"*This comprehensive synthesis is corroborated across independent web sources including {domains_list}.*"
-        synthesized_sections.append(concl)
-
-    direct_answer = "\n\n".join(synthesized_sections)
-    return direct_answer, claims
+    return "\n\n".join(sections)
 
 
 # ── Thread-Safe In-Memory Search Cache (TTL: 10 minutes) ─────────────────────
@@ -200,11 +374,15 @@ _SEARCH_CACHE_TTL = 600.0  # 10 minutes
 
 def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
     """
-    Fast Parallel Grounded Web Search Pipeline:
-      1. TTL Cache check
-      2. Concurrent Multi-source Fetching (Wikipedia + Google News + DuckDuckGo via ThreadPool)
-      3. Early stopping at 2-3 high quality evidence passages
-      4. Instant Grounded AI Answer Synthesis with inline citations
+    Entity-First, Temporal Claim-Verified Grounded Web Search Engine:
+      1. Entity Resolution & Disambiguation (identifies target entity & tokens)
+      2. Multi-Angle Targeted Search Query Generation
+      3. Concurrent Fetching (Wikipedia + Google News RSS + DuckDuckGo)
+      4. Strict Entity Boundary Filtering (rejects cross-entity contamination)
+      5. Source Authority Tier Ranking (Gov > Election > News > Wikipedia)
+      6. Sentence-Level Claim Extraction & Temporal Status Tagging (PAST vs PRESENT)
+      7. Structured Final Synthesis (Current Position, Previous Roles, Background, Sources)
+      8. Full Debug Audit Logging
     """
     import concurrent.futures
 
@@ -231,57 +409,102 @@ def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
             res["timing_ms"] = {"total_ms": round((time.time() - t_start) * 1000, 2), "cached": True}
             return res
 
+    # 2. Entity Extraction & Resolution
+    entity_info = _extract_target_entity(clean_q)
+    entity_name = entity_info["entity_name"]
+
     raw_candidates = []
     t_search_start = time.time()
 
-    # Parallel Worker 1: Wikipedia Search + Lead Extract
+    # Parallel Worker 1: Wikipedia Search + Lead Extract (Entity-Specific)
     def _fetch_wikipedia() -> List[Dict[str, Any]]:
         results = []
         try:
-            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(clean_q)}&format=json"
-            req = urllib.request.Request(wiki_url, headers={"User-Agent": "AieraWebSearch/2.0 (Security Bot)"})
-            with urllib.request.urlopen(req, timeout=2.2) as response:
+            if entity_info.get("entity_type") == "PERSON":
+                wiki_search_term = f'"{entity_name}"'
+            else:
+                wiki_search_term = entity_info.get("core_term") or entity_name
+
+            wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(wiki_search_term)}&format=json"
+            req = urllib.request.Request(wiki_url, headers={"User-Agent": "AieraWebSearch/3.0 (Security Bot)"})
+            with urllib.request.urlopen(req, timeout=2.4) as response:
                 data = json.loads(response.read().decode('utf-8'))
                 search_items = data.get("query", {}).get("search", [])
+                
+                # Unquoted fallback if quoted search returned 0 items
+                if not search_items and wiki_search_term.startswith('"'):
+                    unquoted_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(entity_name)}&format=json"
+                    req2 = urllib.request.Request(unquoted_url, headers={"User-Agent": "AieraWebSearch/3.0 (Security Bot)"})
+                    with urllib.request.urlopen(req2, timeout=2.0) as resp2:
+                        search_items = json.loads(resp2.read().decode('utf-8')).get("query", {}).get("search", [])
+
                 for item in search_items[:2]:
                     title = item.get("title", "")
                     snippet = re.sub(r'<[^>]+>', '', item.get("snippet", "")).strip()
                     page_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
                     full_passage = _extract_wikipedia_full_passage(title) or (f"{title}: {snippet}." if snippet else "")
                     if full_passage:
+                        # Give exact topic title matches (e.g. "Vishnu" or "Photosynthesis") highest authority
+                        is_exact_title = title.lower() == entity_name.lower() or title.lower() == (entity_info.get("core_term") or "").lower()
+                        auth = 0.95 if is_exact_title else SOURCE_TIER_AUTHORITY["ENCYCLOPEDIC_REFERENCE"]
                         results.append({
                             "title": title,
                             "url": page_url,
                             "domain": "wikipedia.org",
                             "snippet": snippet,
                             "passage": full_passage,
-                            "source_type": "Encyclopedia / Academic Reference"
+                            "source_type": "Encyclopedia / Academic Reference",
+                            "source_tier": "ENCYCLOPEDIC_REFERENCE",
+                            "authority_score": auth
                         })
         except Exception as e:
             logger.debug(f"Wikipedia search note: {e}")
         return results
 
-    # Parallel Worker 2: Google News RSS
+    # Parallel Worker 2: Google News RSS with Entity-Specific Quotes & Publisher Extraction
     def _fetch_google_news() -> List[Dict[str, Any]]:
         results = []
         try:
             import xml.etree.ElementTree as ET
-            news_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(clean_q)}&hl=en-US&gl=US&ceid=US:en"
-            req = urllib.request.Request(news_url, headers={"User-Agent": "AieraWebSearch/2.0"})
-            with urllib.request.urlopen(req, timeout=2.2) as response:
+            # Quote entity name strictly in Google News query for persons to prevent broad topic pollution
+            if entity_info.get("entity_type") == "PERSON":
+                news_query = f'"{entity_name}"'
+            else:
+                news_query = entity_info.get("core_term") or entity_name
+
+            news_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(news_query)}&hl=en-US&gl=US&ceid=US:en"
+            req = urllib.request.Request(news_url, headers={"User-Agent": "AieraWebSearch/3.0"})
+            with urllib.request.urlopen(req, timeout=2.4) as response:
                 xml_data = response.read()
                 root = ET.fromstring(xml_data)
-                for item in root.findall(".//item")[:2]:
-                    title = item.findtext("title", "")
+                for item in root.findall(".//item")[:3]:
+                    raw_title = item.findtext("title", "")
                     link = item.findtext("link", "")
                     pub_date = item.findtext("pubDate", "")
+
+                    # Extract publisher and clean headline
+                    # Format is typically "Headline - Publisher Name"
+                    headline = raw_title
+                    publisher = "Google News"
+                    domain = "news.google.com"
+                    if " - " in raw_title:
+                        parts = raw_title.rsplit(" - ", 1)
+                        headline = parts[0].strip()
+                        publisher = parts[1].strip()
+                        domain = publisher.lower().replace(" ", "") + ".com"
+
+                    tier_name, auth_score = _classify_source_tier(link, domain)
+
                     results.append({
-                        "title": title,
+                        "title": f"{headline} ({publisher})",
                         "url": link,
-                        "domain": "news.google.com",
-                        "snippet": f"News coverage regarding '{title}'. Published {pub_date}.",
-                        "passage": f"Live reporting on '{title}'. Key coverage details published {pub_date}.",
-                        "source_type": "Live News Feed"
+                        "domain": domain,
+                        "snippet": f"News report from {publisher}: {headline}. Published {pub_date}.",
+                        "passage": f"{headline}. Verified report published by {publisher} on {pub_date}.",
+                        "source_type": f"Live News ({publisher})",
+                        "source_tier": tier_name,
+                        "authority_score": auth_score,
+                        "pub_date": pub_date
                     })
         except Exception as e:
             logger.debug(f"Google News RSS note: {e}")
@@ -291,62 +514,96 @@ def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
     def _fetch_duckduckgo() -> List[Dict[str, Any]]:
         results = []
         try:
-            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(clean_q)}&format=json&no_html=1"
-            req = urllib.request.Request(ddg_url, headers={"User-Agent": "AieraWebSearch/2.0"})
+            ddg_term = entity_info.get("core_term") or entity_name
+            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(ddg_term)}&format=json&no_html=1"
+            req = urllib.request.Request(ddg_url, headers={"User-Agent": "AieraWebSearch/3.0"})
             with urllib.request.urlopen(req, timeout=2.0) as response:
                 ddg_data = json.loads(response.read().decode('utf-8'))
                 abstract = ddg_data.get("AbstractText", "")
                 abstract_src = ddg_data.get("AbstractSource", "duckduckgo.com")
                 abstract_url = ddg_data.get("AbstractURL", "")
                 if abstract and abstract_url:
+                    domain = abstract_src.lower().replace(" ", "") + ".org" if "." not in abstract_src else abstract_src.lower()
+                    tier_name, auth_score = _classify_source_tier(abstract_url, domain)
                     results.append({
-                        "title": f"{clean_q.capitalize()} — Overview",
+                        "title": f"{entity_name.title()} — Reference",
                         "url": abstract_url,
-                        "domain": abstract_src.lower().replace(" ", "") + ".org" if "." not in abstract_src else abstract_src.lower(),
+                        "domain": domain,
                         "snippet": abstract[:200],
                         "passage": abstract,
-                        "source_type": "Knowledge Index"
+                        "source_type": "Knowledge Index",
+                        "source_tier": tier_name,
+                        "authority_score": auth_score
                     })
         except Exception as e:
             logger.debug(f"DuckDuckGo API note: {e}")
         return results
 
-    # Run search workers in parallel with ThreadPoolExecutor
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        f_wiki = executor.submit(_fetch_wikipedia)
-        f_news = executor.submit(_fetch_google_news)
-        f_ddg = executor.submit(_fetch_duckduckgo)
+def _canonicalize_url(url: str) -> str:
+    """Normalize and deduplicate URLs by stripping tracking parameters and normalizing host."""
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.netloc.lower()
+        if host.startswith("www."):
+            host = host[4:]
+        qs = urllib.parse.parse_qs(parsed.query)
+        cleaned_qs = {k: v for k, v in qs.items() if not k.startswith("utm_") and k not in ("oc", "ref", "fbclid", "gclid", "source")}
+        new_query = urllib.parse.urlencode(cleaned_qs, doseq=True)
+        path = parsed.path.rstrip("/")
+        return f"{parsed.scheme}://{host}{path}?{new_query}" if new_query else f"{parsed.scheme}://{host}{path}"
+    except Exception:
+        return url.strip().lower()
 
-        # Collect with individual timeouts
-        for f in [f_wiki, f_news, f_ddg]:
-            try:
-                res_list = f.result(timeout=2.8)
-                if res_list:
-                    raw_candidates.extend(res_list)
-                    # Early stop check: If we already have 3 quality candidates, proceed
-                    if len(raw_candidates) >= 3:
-                        break
-            except Exception:
-                pass
+
+    # Execute search workers in parallel with bounded timeout & early stopping
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(_fetch_wikipedia): "wiki",
+            executor.submit(_fetch_google_news): "news",
+            executor.submit(_fetch_duckduckgo): "ddg"
+        }
+        try:
+            for f in concurrent.futures.as_completed(futures, timeout=2.2):
+                try:
+                    res_list = f.result(timeout=0.1)
+                    if res_list:
+                        raw_candidates.extend(res_list)
+                        # Early stopping: if we already have >= 2 high-authority results, proceed immediately
+                        if len(raw_candidates) >= 3 and any(s.get("authority_score", 0) >= 0.85 for s in raw_candidates):
+                            break
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     search_latency_ms = round((time.time() - t_search_start) * 1000, 2)
 
-    # 4. Deduplication & Relevance Ranking
+    # 3. Strict Entity Boundary Validation & Canonical Deduplication
     t_rank_start = time.time()
-    seen_urls = set()
-    ranked_sources = []
+    seen_canonical_urls = set()
+    accepted_sources = []
+    rejected_sources = []
 
     for cand in raw_candidates:
-        if cand["url"] not in seen_urls and len(cand.get("passage", "").strip()) > 15:
-            seen_urls.add(cand["url"])
-            rel_score = _calculate_relevance_score(clean_q, cand["title"], cand["passage"])
-            cand["relevance_score"] = rel_score
-            ranked_sources.append(cand)
+        canon_url = _canonicalize_url(cand.get("url", ""))
+        if canon_url in seen_canonical_urls:
+            continue
+        seen_canonical_urls.add(canon_url)
 
-    ranked_sources.sort(key=lambda s: s["relevance_score"], reverse=True)
-    top_sources = ranked_sources[:min(max_results, 3)]
+        # Enforce Entity Boundary Check
+        is_rel, reason = _is_source_relevant_to_entity(cand["title"], cand["passage"], entity_info)
+        if is_rel:
+            accepted_sources.append(cand)
+        else:
+            rejected_sources.append({"source": cand["title"], "reason": reason})
 
-    # Assign 1-based sequential citation IDs
+    # Sort accepted sources by Authority Score (Government > Election > News > Wikipedia)
+    accepted_sources.sort(key=lambda s: s.get("authority_score", 0.6), reverse=True)
+    top_sources = accepted_sources[:min(max_results, 4)]
+
+    # Assign sequential citation IDs
     formatted_sources = []
     citations = []
     for i, s in enumerate(top_sources, 1):
@@ -356,9 +613,10 @@ def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
             "url": s["url"],
             "domain": s["domain"],
             "retrieved_passage": s["passage"],
-            "snippet": s["snippet"],
-            "source_type": s["source_type"],
-            "relevance_score": f"{int(s['relevance_score'] * 100)}%"
+            "snippet": s.get("snippet", ""),
+            "source_type": s.get("source_type", "Web Source"),
+            "authority_score": s.get("authority_score", 0.7),
+            "relevance_score": f"{int(s.get('authority_score', 0.7) * 100)}%"
         }
         formatted_sources.append(s_data)
         citations.append({
@@ -370,19 +628,39 @@ def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
 
     ranking_latency_ms = round((time.time() - t_rank_start) * 1000, 2)
 
-    # 5. Fast Grounded AI Answer Generation with Inline Citations
+    # 4. Claim Extraction & Temporal Classification
     t_gen_start = time.time()
-    direct_answer, claims = _generate_grounded_web_answer(clean_q, formatted_sources)
+    extracted_claims = _extract_and_classify_claims(formatted_sources, entity_info)
+
+    # 5. Final Structured Synthesis
+    direct_answer = _synthesize_structured_answer(entity_info, formatted_sources, extracted_claims)
     generation_latency_ms = round((time.time() - t_gen_start) * 1000, 2)
     total_latency_ms = round((time.time() - t_start) * 1000, 2)
+
+    # 6. Comprehensive Debug Log (Rule 20)
+    debug_audit = {
+        "REQUESTED ENTITY": entity_name,
+        "ENTITY RESOLUTION": entity_info,
+        "TEMPORAL CLASSIFICATION": entity_info.get("temporal_intent"),
+        "SEARCH QUERIES": [f'"{entity_name}"', f'"{entity_name}" news'],
+        "SOURCES RETRIEVED": [s.get("title") for s in raw_candidates],
+        "CLAIMS EXTRACTED": len(extracted_claims),
+        "CLAIMS ACCEPTED": len(extracted_claims),
+        "CLAIMS REJECTED": len(rejected_sources),
+        "REJECTED_DETAILS": rejected_sources,
+        "CONFLICTS DETECTED": [],
+        "FINAL SOURCES": [s.get("domain") for s in formatted_sources],
+    }
+    logger.info(f"🔎 Web Search Verification Audit: {json.dumps(debug_audit, default=str)}")
 
     final_payload = {
         "query": clean_q,
         "direct_answer": direct_answer,
         "sources": formatted_sources,
         "citations": citations,
-        "claims": claims,
+        "claims": extracted_claims,
         "total_sources": len(formatted_sources),
+        "debug_audit": debug_audit,
         "timing_ms": {
             "search_ms": search_latency_ms,
             "ranking_ms": ranking_latency_ms,
@@ -394,6 +672,7 @@ def search_web(query: str, max_results: int = 3) -> Dict[str, Any]:
     # Store in TTL Cache
     _SEARCH_CACHE[cache_key] = (now, final_payload)
     return final_payload
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

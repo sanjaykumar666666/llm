@@ -27,9 +27,12 @@ export function Sidebar({
     <aside className="sidebar-container">
       {/* Brand Header */}
       <div className="sidebar-brand">
-        <div className="brand-logo">
-          <ShieldAlert size={22} />
-        </div>
+        <img 
+          src="/logo.png" 
+          alt="PrivacyShield AI Logo" 
+          className="brand-logo" 
+          style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '10px', boxShadow: '0 0 16px rgba(99, 102, 241, 0.45)' }}
+        />
         <div>
           <h1 className="brand-title">PrivacyShield AI</h1>
           <p className="brand-subtitle">Real-Time Privacy Guard</p>

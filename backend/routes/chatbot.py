@@ -89,26 +89,36 @@ def _build_gemini_messages(
     messages = []
 
     system_preamble = (
-        "You are AI Trust Chat, a secure and privacy-aware AI assistant. "
-        "You answer questions clearly, naturally, helpfully, and accurately. "
-        "For general knowledge, answer from your training. "
-        "For code requests, provide complete working code. "
-        "Do NOT use filler templates. Be specific and factual."
+        "You are AI Trust Chat, a helpful, knowledgeable, and live-grounded AI assistant. "
+        "You provide direct, accurate, and comprehensive answers to the user's questions.\n\n"
+        "GUIDELINES:\n"
+        "1. When retrieved live web evidence is provided, use it to ground and verify your answer with citations like [1], [2].\n"
+        "2. Directly answer questions about well-known topics, deities, concepts, or historical entities (such as 'Vishnu', 'Photosynthesis', 'Bhagavad Gita', etc.) rather than asking for clarification.\n"
+        "3. For people with changing roles or current events, state their verified current status based on the retrieved evidence."
     )
     messages.append({"role": "user", "parts": [system_preamble]})
-    messages.append({"role": "model", "parts": ["Understood. I am AI Trust Chat, ready to assist with accurate, trustworthy responses."]})
+    messages.append({"role": "model", "parts": ["Understood. I am AI Trust Chat, ready to provide clear, direct, and verified answers grounded in evidence."]})
 
-    # Inject conversation history (last 12 turns)
+    # Inject conversation history (excluding current prompt turn and any blocked turns)
     if chat_history:
         history_turns = [
             m for m in chat_history
-            if m.get("role") in ("user", "assistant") and m.get("text", "").strip()
+            if m.get("role") in ("user", "assistant")
+            and m.get("text", "").strip()
+            and not m.get("was_blocked")
+            and m.get("decision") != "BLOCK"
+            and m.get("security_meta", {}).get("decision") != "BLOCK"
         ]
-        for msg in history_turns[-12:]:
-            role = "user" if msg["role"] == "user" else "model"
-            messages.append({"role": role, "parts": [msg["text"].strip()]})
+        # Pop current turn if it is already at the tail of chat_history
+        if history_turns and history_turns[-1].get("role") == "user" and history_turns[-1].get("text", "").strip() == raw_prompt.strip():
+            history_turns = history_turns[:-1]
 
-    # Build final user message
+        for msg in history_turns[-10:]:
+            role = "user" if msg["role"] == "user" else "model"
+            msg_text = msg.get("masked_text") or msg.get("text", "").strip()
+            messages.append({"role": role, "parts": [msg_text]})
+
+    # Build final user message (Single definitive injection)
     if rag_context:
         final_text = (
             f"You are answering based on the following retrieved document context.\n\n"
@@ -120,9 +130,9 @@ def _build_gemini_messages(
     elif synthesis_context:
         final_text = (
             f"USER QUESTION: \"{raw_prompt}\"\n\n"
-            f"RETRIEVED WEB EVIDENCE:\n{synthesis_context}\n\n"
-            f"Synthesize a concise, natural response. Do NOT dump raw results verbatim. "
-            f"Conclude with '### Sources Used' listing markdown links."
+            f"VERIFIED WEB EVIDENCE:\n{synthesis_context}\n\n"
+            f"TASK:\n"
+            f"Answer the user's question directly, clearly, and comprehensively using the evidence above. Include citations like [1], [2] referencing the sources."
         )
     else:
         final_text = raw_prompt
@@ -169,10 +179,20 @@ def chat_endpoint(req: ChatRequest):
     if not raw_prompt:
         return _empty_response(request_id)
 
-    # ── STAGE 0: Fast TTL Query Cache Check (<0.1ms) ──────────────────────────
+    # ── STAGE 0a: Fast Query Router (<1ms) ───────────────────────────────────
+    # Router runs FIRST so CURRENT/UNKNOWN queries bypass the cache entirely.
+    t_router_start = time.perf_counter()
+    routing_intent = WebSearchRouter.classify_query_intent(raw_prompt, req.chat_history)
+    router_ms = round((time.perf_counter() - t_router_start) * 1000, 2)
+
+    # ── STAGE 0b: Fast TTL Query Cache Check (<0.1ms) ─────────────────────────
+    # Only serve cached responses for STATIC queries.
+    # CURRENT / UNKNOWN queries must NEVER be served from cache (stale data risk).
+    _temporal_class = routing_intent.get("temporal_class", "UNKNOWN")
+    _is_cacheable_query = _temporal_class == "STATIC"
     cache_key = f"{raw_prompt.lower().strip()}||{user_role}||{req.sanitization_mode or 'REDACT'}"
     now_ts = time.time()
-    if cache_key in _CHAT_RESPONSE_CACHE and not req.confirmed_by_user:
+    if _is_cacheable_query and cache_key in _CHAT_RESPONSE_CACHE and not req.confirmed_by_user:
         cached_ts, cached_payload = _CHAT_RESPONSE_CACHE[cache_key]
         if (now_ts - cached_ts) < _CHAT_CACHE_TTL:
             cached_resp = dict(cached_payload)
@@ -185,14 +205,10 @@ def chat_endpoint(req: ChatRequest):
                 "llm_ms": 0.0,
                 "render_ms": 0.05,
                 "tier": "SIMPLE (CACHE HIT)",
+                "temporal_class": "STATIC",
                 "cached": True,
             }
             return cached_resp
-
-    # ── STAGE 0b: Fast Query Router (<1ms) ────────────────────────────────────
-    t_router_start = time.perf_counter()
-    routing_intent = WebSearchRouter.classify_query_intent(raw_prompt, req.chat_history)
-    router_ms = round((time.perf_counter() - t_router_start) * 1000, 2)
 
     # ── STAGE 1 & 2: Evidence-Based Security Analysis & Injection Detection ───
     t_sec_start = time.perf_counter()
@@ -355,6 +371,14 @@ def chat_endpoint(req: ChatRequest):
             calculation_source=analysis.get("calculation_source", "evidence_based_risk_engine"),
         )
         resp_payload["timing_breakdown"] = timing_breakdown
+        # Credential-specific advisory and masked input for frontend
+        resp_payload["credential_types_detected"] = analysis.get("credential_types_detected", [])
+        resp_payload["security_advisory"] = analysis.get("security_advisory")
+        # Generate masked version of input for safe UI display
+        from privacy_engine.sanitizer import PrivacySanitizer
+        _san = PrivacySanitizer()
+        _san_result = _san.sanitize_text(raw_prompt, mode="REDACT")
+        resp_payload["masked_input"] = _san_result.get("sanitized_text", "")
         return resp_payload
 
     # ── STAGE 6: Sanitization for MEDIUM / HIGH RISK (WARN / SANITIZE) ─────────
@@ -392,14 +416,14 @@ def chat_endpoint(req: ChatRequest):
             rag_context = rag_result["context"]
             rag_meta = {"source_docs": rag_result["source_docs"], "chunks_retrieved": rag_result["chunks_retrieved"]}
 
-    # ── STAGE 9 & 10: Grounded Search / Fast Direct LLM Generation ───────────
+    # ── STAGE 9 & 10: Live Grounded Web Search & Evidence-Based LLM Synthesis ──
     sources_list = []
     mcp_meta = None
     response_text = ""
     search_ms = 0.0
     llm_ms = 0.0
 
-    # Only invoke search if WebSearchRouter categorized as WEB_REQUIRED / COMPLEX_RESEARCH
+    # Execute Live Web Retrieval for all user questions
     if not rag_context and req.mcp_enabled and routing_intent["should_search"]:
         t_search_start = time.perf_counter()
         from mcp_engine.tool_security_gateway import secure_tool_call
@@ -417,10 +441,43 @@ def chat_endpoint(req: ChatRequest):
             response_text = f"🔒 **TOOL EXECUTION BLOCKED**\n\n{tool_res.get('reason', 'Tool call blocked by security policy.')}"
         else:
             sources_list = tool_res.get("sources", [])
-            response_text = tool_res.get("direct_answer", "")
+            direct_grounded_answer = tool_res.get("direct_answer", "")
 
-            # Append verified sources list below the answer
-            if sources_list and "### Sources" not in response_text:
+            # Prepare synthesis context from retrieved evidence
+            evidence_blocks = []
+            for s in sources_list:
+                evidence_blocks.append(f"Source [{s['citation_id']}]: {s['title']} ({s['domain']})\nEvidence: {s.get('retrieved_passage', s.get('snippet', ''))}")
+            synthesis_context = "\n\n".join(evidence_blocks)
+
+            # Invoke Gemini to synthesize response grounded strictly in retrieved evidence
+            t_llm_start = time.perf_counter()
+            messages = _build_gemini_messages(
+                raw_prompt=prompt_to_send,
+                chat_history=req.chat_history,
+                synthesis_context=synthesis_context,
+                rag_context="",
+                model_label=model_info["model_label"],
+            )
+            genai_payload = _get_gemini_client().generate_chat_response(messages=messages)
+            llm_ms = round((time.perf_counter() - t_llm_start) * 1000, 2)
+
+            if genai_payload.get("success") and genai_payload.get("response_text"):
+                response_text = genai_payload["response_text"]
+            elif direct_grounded_answer:
+                response_text = direct_grounded_answer
+            elif sources_list:
+                summary_parts = []
+                for s in sources_list:
+                    title = s.get("title", "")
+                    passage = s.get("retrieved_passage") or s.get("snippet", "")
+                    if passage:
+                        summary_parts.append(f"**{title}**: {passage.strip()}")
+                response_text = "\n\n".join(summary_parts) if summary_parts else "⚠️ Live web evidence was retrieved, but AI answer synthesis is currently unavailable."
+            else:
+                response_text = "⚠️ Unable to generate an answer at this moment. Please check your API quota or retry shortly."
+
+            # Append verified sources list below the answer if not already present
+            if sources_list and "### Sources" not in response_text and "#### Sources" not in response_text:
                 source_links = "\n".join([f"[{s['citation_id']}] [{s['title']}]({s['url']}) — `{s['domain']}`" for s in sources_list])
                 response_text += f"\n\n### Sources\n{source_links}"
 
@@ -434,7 +491,7 @@ def chat_endpoint(req: ChatRequest):
             "timing_ms": tool_res.get("timing_ms", search_ms)
         }
 
-    # FAST DIRECT LLM GENERATION for SIMPLE queries (No web search)
+    # FALLBACK / GREETINGS DIRECT LLM GENERATION (Only if no web search was performed e.g. "hi")
     if not response_text:
         t_llm_start = time.perf_counter()
         messages = _build_gemini_messages(
@@ -487,6 +544,11 @@ def chat_endpoint(req: ChatRequest):
         pii_action=pii_action,
         output_action=output_action,
         output_sensitive=output_sensitive,
+        # Freshness metadata
+        freshness_classification=routing_intent.get("temporal_class", "UNKNOWN"),
+        web_search_performed=routing_intent.get("should_search", False) and len(sources_list) > 0,
+        sources_count=len(sources_list),
+        temporal_domain=routing_intent.get("temporal_domain"),
     )
     render_ms = round((time.perf_counter() - t_out_start) * 1000, 2)
     total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
@@ -499,6 +561,9 @@ def chat_endpoint(req: ChatRequest):
         "llm_ms": llm_ms,
         "render_ms": render_ms,
         "tier": routing_intent.get("category", "SIMPLE"),
+        "temporal_class": routing_intent.get("temporal_class", "STATIC"),
+        "temporal_domain": routing_intent.get("temporal_domain"),
+        "sources_count": len(sources_list),
     }
 
     # Background Async Audit Logging
@@ -555,7 +620,10 @@ def chat_endpoint(req: ChatRequest):
     resp_payload["timing_breakdown"] = timing_breakdown
 
     # Save to TTL Cache (Only for SAFE responses with zero PII/secrets)
-    if decision == "ALLOW" and not pii_detected and not secret_detected and not injection_detected and not rag_context:
+    # Only cache STATIC queries — CURRENT/UNKNOWN must never be served stale.
+    if (decision == "ALLOW" and not pii_detected and not secret_detected
+            and not injection_detected and not rag_context
+            and routing_intent.get("temporal_class") == "STATIC"):
         _CHAT_RESPONSE_CACHE[cache_key] = (now_ts, resp_payload)
 
     return resp_payload

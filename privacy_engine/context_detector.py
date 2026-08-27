@@ -161,20 +161,98 @@ _CREDENTIAL_DISCLOSURE_PATTERNS: List[Tuple[str, str, str, str]] = [
         "CRITICAL",
         "PEM formatted cryptographic Private Key block"
     ),
+    # ── OTP / One-Time Password Detection ─────────────────────────────────────
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:my|the|our|your)?\s*(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s+(?:is|was|=|:)\s*["\']?(\d{4,8})["\']?)',
+        "CRITICAL",
+        "One-Time Password (OTP) credential disclosure"
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s*(?:code|number|num|no)?\s*[:=]\s*["\']?(\d{4,8})["\']?)',
+        "CRITICAL",
+        "OTP credential assignment or disclosure"
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:my|the|our|your)?\s*(?:otp|one[- ]?time[- ]?(?:password|code|pin))\s+["\']?(\d{4,8})["\']?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "Direct One-Time Password (OTP) code disclosure"
+    ),
+    (
+        "CREDENTIAL_OTP",
+        r'(?:\b(?:verification|2fa|two[- ]?factor|mfa|authentication)\s+(?:code|otp|pin)\s+(?:is|was|=|:)\s*["\']?(\d{4,8})["\']?)',
+        "CRITICAL",
+        "Two-factor / MFA verification code disclosure"
+    ),
+    # ── PIN Detection ─────────────────────────────────────────────────────────
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:my|the|our|your)?\s*(?:atm|debit|credit|bank|card|transaction|upi|mobile)?\s*(?:pin|pin\s*(?:number|num|no|code))\s*(?:is|was|=|:)\s*["\']?(\d{4,6})["\']?)',
+        "CRITICAL",
+        "Personal Identification Number (PIN) disclosure"
+    ),
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:atm|debit|credit|bank|card|transaction|upi|mobile)\s+pin\s*[:=]\s*["\']?(\d{4,6})["\']?)',
+        "CRITICAL",
+        "Banking / Card PIN assignment disclosure"
+    ),
+    (
+        "CREDENTIAL_PIN",
+        r'(?:\b(?:my|the|our|your)?\s*(?:atm|debit|credit|bank|card|transaction|upi|mobile)?\s*(?:pin|pin\s*(?:number|num|no|code))\s+["\']?(\d{4,6})["\']?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "Direct PIN code disclosure"
+    ),
+    # ── Contextual Number-Only Password Detection ─────────────────────────────
+    (
+        "CREDENTIAL_PASSWORD",
+        r'(?:\b(?:my|the|our|admin|user|root|account)?\s*(?:password|passwd|pwd)\s+(?:is\s+)?["\']?(\d{4,})["\']?(?:\s|$|[.,;!?]))',
+        "CRITICAL",
+        "Numeric-only password disclosure detected via contextual keyword"
+    ),
+    # ── Auth Token / Session Token Disclosure ─────────────────────────────────
+    (
+        "CREDENTIAL_AUTH_TOKEN",
+        r'(?:\b(?:my|the|our)?\s*(?:auth(?:entication)?|session|access|refresh)\s*(?:token|key)\s+(?:is|was|=|:)\s*["\']?([^\s"\',;]{8,})["\']?)',
+        "CRITICAL",
+        "Authentication / Session token credential disclosure"
+    ),
+    # ── Secret Key Disclosure ─────────────────────────────────────────────────
+    (
+        "CREDENTIAL_SECRET_KEY",
+        r'(?:\b(?:my|the|our)?\s*(?:secret|private|signing|encryption)\s*(?:key|code|phrase)\s+(?:is|was|=|:)\s*["\']?([^\s"\',;]{6,})["\']?)',
+        "CRITICAL",
+        "Secret / Private key value disclosure"
+    ),
+    # ── Bank / Net Banking / UPI Credential Disclosure ────────────────────────
+    (
+        "CREDENTIAL_BANK_LOGIN",
+        r'(?:\b(?:net\s*banking|mobile\s*banking|internet\s*banking|online\s*banking|bank(?:ing)?)\s+(?:password|passwd|pwd|pin|login)\s+(?:is|was|=|:)\s*["\']?([^\s"\',;]{3,})["\']?)',
+        "CRITICAL",
+        "Net Banking / Mobile Banking login credential disclosure"
+    ),
+    (
+        "CREDENTIAL_BANK_LOGIN",
+        r'(?:\b(?:upi)\s+(?:pin|password|mpin)\s*(?:is|was|=|:)\s*["\']?(\d{4,6})["\']?)',
+        "CRITICAL",
+        "UPI PIN / Mobile Payment credential disclosure"
+    ),
 ]
 
 # ── Standard PII Patterns ─────────────────────────────────────────────────────
 _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     # (Entity Type, Pattern, Severity, Description)
     (
-        "EMAIL_ADDRESS",
-        r'\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b',
+        "PHONE_NUMBER",
+        r'(?i)(?:\b(?:my|the|our|contact)?\s*(?:phone|mobile|cell|tel|telephone|whatsapp)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?((?:\+?91[-\s]?)?[6-9]\d{4}[-\s]?\d{5}|\+?1[\s.-]?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\d{10})["\']?)',
         "MEDIUM",
-        "Direct contact email address"
+        "Personal contact phone number with context"
     ),
     (
         "PHONE_NUMBER",
-        r'(?<!\d)(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)|\b(?:\+91[\s-]?)?[6-9]\d{9}\b|\+44[\s.-]?(?:\d[\s.-]?){9,11}\b',
+        r'(?<!\d)(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)|\b(?:\+91[\s-]?)?[6-9]\d{4}[-\s]?\d{5}\b|\b(?:\+91[\s-]?)?[6-9]\d{9}\b|\+44[\s.-]?(?:\d[\s.-]?){9,11}\b',
         "MEDIUM",
         "Personal contact phone number"
     ),
@@ -228,9 +306,21 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "GOVERNMENT_ID_AADHAAR",
+        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{12})["\']?)',
+        "HIGH",
+        "Indian National Aadhaar Number with contextual phrase"
+    ),
+    (
+        "GOVERNMENT_ID_AADHAAR",
         r'\b\d{4}[\s-]\d{4}[\s-]\d{4}\b',
         "HIGH",
-        "12-digit Indian National Aadhaar Number"
+        "12-digit Indian National Aadhaar Number formatted with spaces or hyphens"
+    ),
+    (
+        "GOVERNMENT_ID_PAN",
+        r'(?i)(?:\b(?:my|the|our)?\s*(?:pan|pan\s*card)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?([A-Za-z]{5}\d{4}[A-Za-z])["\']?)',
+        "HIGH",
+        "Indian Income Tax Permanent Account Number (PAN) with contextual phrase"
     ),
     (
         "GOVERNMENT_ID_PAN",
@@ -243,6 +333,12 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         r'\b[A-Z]{2}\s*\d{6}\s*[A-D]\b',
         "HIGH",
         "UK National Insurance Number (NINO)"
+    ),
+    (
+        "PASSPORT_NUMBER",
+        r'(?i)(?:\b(?:my|the|our)?\s*(?:passport|ppt)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?([A-Za-z][0-9]{7,8})["\']?)',
+        "HIGH",
+        "Passport document number with contextual phrase"
     ),
     (
         "PASSPORT_NUMBER",

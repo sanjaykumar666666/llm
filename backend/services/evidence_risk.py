@@ -187,18 +187,16 @@ def calculate_evidence_risk(
         for e in entities
     )
 
-    # Semantic Personal Context Augmentation from ML (Paraphrases without exact keywords)
-    if not is_educational and not (has_pers_high or has_pers_mild):
-        if hybrid_class == "PERSONAL_CONTEXT" and hybrid_conf >= 0.55:
-            if len(text.split()) >= 15 or any(w in text.lower() for w in ["everything", "five-year", "private events", "partner and family", "custody", "infidelity"]):
-                has_pers_high = True
-            else:
-                has_pers_mild = True
+    # Educational / General knowledge queries without credentials are strictly SAFE (0% risk)
+    if is_educational and not has_critical:
+        entities = []
+        has_pers_high = False
+        has_pers_mild = False
 
     # Severity baseline points mapping
     severity_baselines = {
-        "CRITICAL": 85,
-        "HIGH": 65,
+        "CRITICAL": 95,
+        "HIGH": 85,
         "MEDIUM": 45,
         "LOW": 15,
     }
@@ -226,11 +224,10 @@ def calculate_evidence_risk(
             "description": f"Primary detection of {max_severity} severity entity ({len(entities)} entity match(es) across {len(distinct_categories)} category(ies))."
         })
 
-        # ── 2. Multi-Entity Diversity Adjustment (Non-linear, Bounded) ─────────
+        # Multi-Entity Diversity Adjustment (Non-linear, Bounded)
         if len(distinct_categories) > 1 and not has_critical:
-            # Each additional distinct category adds +6 points, capped at +15
             multi_bonus = min(15, (len(distinct_categories) - 1) * 6)
-            base_score = min(75, base_score + multi_bonus)
+            base_score = min(90, base_score + multi_bonus)
             risk_factors.append({
                 "category": "MULTI_ENTITY_DIVERSITY",
                 "severity": "MEDIUM",
@@ -238,60 +235,15 @@ def calculate_evidence_risk(
                 "contribution": multi_bonus,
                 "description": f"Multiple distinct sensitive categories present ({', '.join(distinct_categories)})."
             })
-
-    elif has_pers_high:
-        base_score = 65
-        max_severity = "HIGH"
-        risk_factors.append({
-            "category": "PERSONAL_CONTEXT",
-            "severity": "HIGH",
-            "source": "hybrid_ml",
-            "contribution": 65,
-            "description": "Detailed personal experiences or intimate disclosures identified via semantic classification."
-        })
-    elif has_pers_mild:
-        base_score = 45
-        max_severity = "MEDIUM"
-        risk_factors.append({
-            "category": "PERSONAL_CONTEXT",
-            "severity": "MEDIUM",
-            "source": "hybrid_ml",
-            "contribution": 45,
-            "description": "Mild personal context or relationship discussion identified via semantic classification."
-        })
-
-    # ── 3. ML Ensemble Corroboration ──────────────────────────────────────────
-    ml_adjustment = 0
-    if ml_status == "available":
-        if base_score > 0 and not has_critical:
-            # Scale risk moderately based on ML agreement (-6 to +8 pts)
-            ml_adjustment = int(round(10.0 * (p_ml - 0.50) * (0.5 + 0.5 * agreement)))
-            if ml_adjustment != 0:
-                risk_factors.append({
-                    "category": "ML_CORROBORATION",
-                    "severity": "LOW",
-                    "source": "hybrid_ml",
-                    "contribution": ml_adjustment,
-                    "description": f"ML hybrid ensemble corroboration (P_risk={p_ml:.2f}, agreement={agreement:.0%})."
-                })
-        elif p_ml >= 0.80 and agreement >= 0.70 and not is_educational and base_score == 0:
-            # Entity-free strong ML agreement on sensitive context
-            ml_adjustment = int(round(35.0 * (p_ml - 0.50)))
-            risk_factors.append({
-                "category": "ML_SEMANTIC_DETECTION",
-                "severity": "MEDIUM",
-                "source": "hybrid_ml",
-                "contribution": ml_adjustment,
-                "description": "High ML semantic probability on sensitive context in entity-free query."
-            })
-
-    # ── 4. Final Risk Score & Bounds Computation ──────────────────────────────
-    if base_score == 0 and ml_adjustment <= 0:
-        risk_score = 0
     else:
-        risk_score = max(0, min(100, base_score + ml_adjustment))
+        base_score = 0
 
-    # ── 5. Decision Policy & Threshold Mapping ─────────────────────────────────
+    # ── 2. Final Risk Score Computation ──────────────────────────────────────
+    # Privacy Risk Score is derived strictly from actual sensitive information evidence.
+    # Clean inputs (e.g. names, questions, concepts) evaluate to 0% LOW ALLOW.
+    risk_score = base_score
+
+    # ── 3. Decision Policy & Threshold Mapping ─────────────────────────────────
     has_standard_pii = any(e.get("category") not in ("Highly Personal Context", "Personal Context") for e in entities)
 
     requires_confirmation = False
@@ -319,15 +271,15 @@ def calculate_evidence_risk(
         requires_confirmation = True
 
     elif has_standard_pii:
-        # Standard PII entities (30 - 59 MEDIUM / WARN with MASK/SANITIZE action)
-        risk_score = max(35, min(75, risk_score))
+        # Standard PII entities (35 - 90 HIGH/MEDIUM with MASK/SANITIZE action)
+        risk_score = max(35, min(90, risk_score))
         risk_level = get_risk_level_from_score(risk_score)
         decision = "WARN"
-        status_banner = "🟡 PRIVACY RISK DETECTED"
+        status_banner = "🔴 PRIVACY RISK DETECTED" if risk_level in ("HIGH", "CRITICAL") else "🟡 PRIVACY RISK DETECTED"
         action_label = "🛡️ MASK / SANITIZE before sending to LLM"
 
-    elif has_pers_mild or (30 <= risk_score < 60):
-        # Mild personal context or borderline risk (30 - 59 MEDIUM / WARN)
+    elif has_pers_mild:
+        # Mild personal context (35 - 59 MEDIUM / WARN)
         risk_score = max(35, min(59, risk_score))
         risk_level = "MEDIUM"
         decision = "WARN"
@@ -335,14 +287,14 @@ def calculate_evidence_risk(
         action_label = "🛡️ PRIVACY WARNING — Review before sending"
 
     else:
-        # Safe clean text (0 - 29 LOW / ALLOW)
+        # Safe clean text: strictly 0% LOW ALLOW
         risk_score = 0
         risk_level = "LOW"
         decision = "ALLOW"
         status_banner = "🟢 NO PRIVACY RISK"
         action_label = "✓ SAFE TO SEND"
 
-    # ── 6. Evidence & WHERE Items Formulation (Zero Private Content Leaks) ────
+    # ── 4. Evidence & WHERE Items Formulation (Zero Private Content Leaks) ────
     detected_risks = list(dict.fromkeys([e["category"] for e in entities]))
     if (has_pers_high or has_pers_mild) and "Personal Context" not in detected_risks and "Highly Personal Context" not in detected_risks:
         detected_risks.append("Personal Context")
@@ -370,12 +322,6 @@ def calculate_evidence_risk(
                 f"{ent['category']} detected — {ent['detected_span']} "
                 f"(severity: {ent['severity']}, confidence: {ent.get('confidence', 0.95)*100:.0f}%)"
             )
-
-    if ml_adjustment != 0 and not (has_pers_high or has_pers_mild):
-        sign = "+" if ml_adjustment > 0 else ""
-        evidence.append(
-            f"ML ensemble corroboration: P(Risk)={p_ml:.2f}, Model Agreement={agreement*100:.0f}% ({sign}{ml_adjustment} pts)"
-        )
 
     # ── 7. Model Disagreement Diagnostics ─────────────────────────────────────
     disagreement_note = None
@@ -405,15 +351,37 @@ def calculate_evidence_risk(
         routing_action = "SAFE → forwarded to LLM"
     elif decision == "BLOCK":
         for ent in entities:
-            if "Password" in ent["category"] or "Credential" in ent["category"]:
+            if "Password" in ent["category"] or "Credential" in ent["category"] or ent["entity_type"] == "CREDENTIAL_PASSWORD":
                 why_bullets.append("• Credential information detected")
                 why_bullets.append("• Sensitive authentication information should not be sent to an external LLM")
+                why_bullets.append("• 🔐 If this is an active password, change it immediately")
+            elif ent["entity_type"] == "CREDENTIAL_OTP":
+                why_bullets.append("• One-Time Password (OTP) / Verification code detected")
+                why_bullets.append("• ⚠️ NEVER share OTP codes — they grant instant account access")
+                why_bullets.append("• If you received this OTP unexpectedly, your account may be under attack")
+            elif ent["entity_type"] == "CREDENTIAL_PIN":
+                why_bullets.append("• Personal Identification Number (PIN) detected")
+                why_bullets.append("• ⚠️ PINs provide direct access to bank accounts and cards")
+                why_bullets.append("• 🔐 Change your PIN immediately if it has been shared")
+            elif ent["entity_type"] == "CREDENTIAL_AUTH_TOKEN":
+                why_bullets.append("• Authentication / Session token detected")
+                why_bullets.append("• ⚠️ Tokens can be used to impersonate your account")
+                why_bullets.append("• 🔐 Revoke this token and generate a new one immediately")
+            elif ent["entity_type"] == "CREDENTIAL_SECRET_KEY":
+                why_bullets.append("• Secret / Private key detected")
+                why_bullets.append("• ⚠️ Secret keys provide full API or cryptographic access")
+                why_bullets.append("• 🔐 Rotate this key immediately in your service dashboard")
+            elif ent["entity_type"] == "CREDENTIAL_BANK_LOGIN":
+                why_bullets.append("• Bank / Net Banking / UPI credential detected")
+                why_bullets.append("• ⚠️ Banking credentials provide direct access to financial accounts")
+                why_bullets.append("• 🔐 Change your banking password/PIN immediately")
             elif "Financial" in ent["category"]:
                 why_bullets.append("• Financial payment credential combination detected (Card + CVV/Exp)")
                 why_bullets.append("• High-risk financial authorization data should not be sent to an external LLM")
             elif "API Key" in ent["category"] or "Token" in ent["category"]:
                 why_bullets.append("• Cloud / API secret token detected")
                 why_bullets.append("• Sensitive API keys must not be shared with external LLMs")
+                why_bullets.append("• 🔐 Rotate this API key/token immediately")
             elif "Prompt Injection" in ent["category"]:
                 why_bullets.append("• Adversarial prompt injection or guardrail override attempt detected")
             else:
@@ -531,6 +499,65 @@ def calculate_evidence_risk(
         "ml_agreement": round(agreement, 4),
         "has_critical_secret": has_critical,
         "ml_analysis": ml_analysis,
+        # Credential-specific security advisory for frontend
+        "credential_types_detected": list(set(
+            e["entity_type"] for e in entities
+            if e["entity_type"] in (
+                "CREDENTIAL_PASSWORD", "CREDENTIAL_OTP", "CREDENTIAL_PIN",
+                "CREDENTIAL_AUTH_TOKEN", "CREDENTIAL_SECRET_KEY", "CREDENTIAL_BANK_LOGIN",
+            )
+        )),
+        "security_advisory": _build_security_advisory(entities) if has_critical else None,
+    }
+
+
+def _build_security_advisory(entities: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build structured credential-specific security advisory for frontend display."""
+    advisory_items = []
+    _CREDENTIAL_ADVISORIES = {
+        "CREDENTIAL_PASSWORD": {
+            "icon": "🔐", "type": "Password",
+            "warning": "A plaintext password was detected in your message.",
+            "action": "Change this password immediately on the associated service.",
+        },
+        "CREDENTIAL_OTP": {
+            "icon": "📱", "type": "OTP / Verification Code",
+            "warning": "A One-Time Password (OTP) was detected. OTPs grant instant account access.",
+            "action": "NEVER share OTP codes with anyone. If you did not request this OTP, secure your account now.",
+        },
+        "CREDENTIAL_PIN": {
+            "icon": "🏦", "type": "PIN",
+            "warning": "A Personal Identification Number (PIN) was detected.",
+            "action": "Change your PIN immediately at your bank/ATM/service provider.",
+        },
+        "CREDENTIAL_AUTH_TOKEN": {
+            "icon": "🔑", "type": "Authentication Token",
+            "warning": "An authentication or session token was detected.",
+            "action": "Revoke this token immediately and generate a new one from your service dashboard.",
+        },
+        "CREDENTIAL_SECRET_KEY": {
+            "icon": "🗝️", "type": "Secret Key",
+            "warning": "A secret/private key was detected.",
+            "action": "Rotate this key immediately. Revoke the compromised key from your service provider.",
+        },
+        "CREDENTIAL_BANK_LOGIN": {
+            "icon": "🏧", "type": "Banking Credential",
+            "warning": "A banking login credential (net banking password/UPI PIN) was detected.",
+            "action": "Change your banking password/PIN immediately through your bank's official app or website.",
+        },
+    }
+    seen_types = set()
+    for ent in entities:
+        etype = ent.get("entity_type", "")
+        if etype in _CREDENTIAL_ADVISORIES and etype not in seen_types:
+            seen_types.add(etype)
+            advisory_items.append(_CREDENTIAL_ADVISORIES[etype])
+
+    return {
+        "detected_count": len(advisory_items),
+        "items": advisory_items,
+        "global_warning": "⛔ Sensitive credentials were detected in your message. This message was NOT sent to any AI model.",
+        "global_action": "If any of these are active credentials, change/revoke them immediately.",
     }
 
 

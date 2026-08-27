@@ -302,20 +302,20 @@ def render_youtube_analyzer_view() -> None:
     elif "#sample_safe" in url_input or selected_preset_label == "🟢 Enterprise AI Privacy Architecture (Safe - No PII)":
         custom_transcript_payload = SAMPLE_TRANSCRIPTS["sample_safe"]
 
-    # Session State Persistence
-    if "yt_analysis_result" not in st.session_state or analyze_clicked:
-        if analyze_clicked:
-            render_pipeline_loading_animation()
-            time.sleep(0.3)
-            with st.spinner("Executing BERT + Naive Bayes Multimodal Privacy Pipeline..."):
-                res = APIClient.analyze_youtube(url_input, custom_transcript=custom_transcript_payload)
-                st.session_state["yt_analysis_result"] = res
-        elif "yt_analysis_result" not in st.session_state:
-            # Initial auto-analysis on default preset
+    # Session State Persistence (Rule 1, 12, 25)
+    cache_key = f"{url_input.strip()}_{selected_preset_label}"
+    if analyze_clicked:
+        render_pipeline_loading_animation()
+        time.sleep(0.2)
+        with st.spinner("Executing BERT + Naive Bayes Multimodal Privacy Pipeline..."):
             res = APIClient.analyze_youtube(url_input, custom_transcript=custom_transcript_payload)
             st.session_state["yt_analysis_result"] = res
-
-    analysis_data = st.session_state.get("yt_analysis_result", {})
+            st.session_state["yt_cache_key"] = cache_key
+    
+    analysis_data = st.session_state.get("yt_analysis_result", None)
+    if not analysis_data:
+        st.info("💡 Click **'🚀 ANALYZE VIDEO'** above to run multimodal privacy analysis and keyframe/transcript scan.")
+        return
 
     # ── 3. ERROR HANDLING ──────────────────────────────────────────────────────
     if analysis_data.get("status") == "error":

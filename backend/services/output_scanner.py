@@ -23,6 +23,14 @@ OUTPUT_SCAN_PATTERNS = [
     ("PRIVATE_KEY",      r'-----BEGIN [A-Z ]*PRIVATE KEY-----', "[PRIVATE_KEY_REDACTED]"),
     ("AADHAAR",          r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}\b', "[AADHAAR_REDACTED]"),
     ("IP_ADDRESS",       r'\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b', "[IP_REDACTED]"),
+    # Credential patterns for OTP, PIN, bank, auth tokens
+    ("OTP_CODE",         r'(?:\b(?:otp|one[- ]?time[- ]?(?:password|code|pin)|verification\s+code|2fa\s+code)\s*(?:is|was|=|:)?\s*["\']?\d{4,8}["\']?)', "[OTP_REDACTED]"),
+    ("PIN_CODE",         r'(?:\b(?:atm|debit|credit|bank|card|upi|mobile)?\s*pin\s*(?:is|was|=|:)?\s*["\']?\d{4,6}["\']?)', "[PIN_REDACTED]"),
+    ("BANK_CREDENTIAL",  r'(?:\b(?:net\s*banking|mobile\s*banking|internet\s*banking|online\s*banking)\s+(?:password|pwd|pin|login)\s+(?:is|was|=|:)\s*["\']?[^\s"\',;]{3,}["\']?)', "[BANK_CREDENTIAL_REDACTED]"),
+    ("UPI_PIN",          r'(?:\b(?:upi)\s+(?:pin|password|mpin)\s*(?:is|was|=|:)\s*["\']?\d{4,6}["\']?)', "[UPI_PIN_REDACTED]"),
+    ("AUTH_TOKEN",       r'(?:\b(?:auth(?:entication)?|session|access|refresh)\s*(?:token|key)\s+(?:is|was|=|:)\s*["\']?[^\s"\',;]{8,}["\']?)', "[AUTH_TOKEN_REDACTED]"),
+    ("BEARER_TOKEN",     r'[Bb]earer\s+[A-Za-z0-9\-_=.]{20,}', "[BEARER_TOKEN_REDACTED]"),
+    ("DB_CONNECTION",    r'(?:postgres|postgresql|mysql|mongodb|redis|mssql|oracle)://[^\s:]+:[^\s@]+@[^\s/:]+(?::\d+)?(?:/[^\s]*)?', "[DB_CREDENTIALS_REDACTED]"),
 ]
 
 

@@ -128,9 +128,7 @@ def run_full_audit():
     # --------------------------------------------------------------------------
     # 5. VIDEO ANALYSIS / PRIVACY GATE
     # --------------------------------------------------------------------------
-    inp_h = UnifiedInputHandler()
-    prep = UnifiedPreprocessor()
-    det = UnifiedDetector()
+    inp_h = MultimodalInputHandler()
 
     r5_video = audit_step("5. Video Analysis", "SYNTHETIC_VIDEO", lambda: inp_h.handle_video(
         file_bytes=b"FAKE_MP4_HEADER_DATA_1234567890",

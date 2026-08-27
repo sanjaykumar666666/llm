@@ -9,9 +9,12 @@ export function AboutProjectModal({ isOpen, onClose }) {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div className="brand-logo" style={{ width: '32px', height: '32px' }}>
-              <ShieldAlert size={18} />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Logo" 
+              className="brand-logo" 
+              style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px' }}
+            />
             <div>
               <h2 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-primary)' }}>
                 About Project

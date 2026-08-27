@@ -55,7 +55,7 @@ div[data-testid="stToolbar"] {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   FULL-WIDTH DESKTOP LAYOUT SYSTEM — 92–96% of Viewport
+   STABLE APP SHELL LAYOUT SYSTEM (Sidebar + Main Content)
    ═══════════════════════════════════════════════════════════════════ */
 
 html, body, [data-testid="stApp"], .stApp {
@@ -65,47 +65,38 @@ html, body, [data-testid="stApp"], .stApp {
     padding: 0 !important;
     overflow-x: hidden !important;
     background-color: var(--bg-void) !important;
-    background-image:
-        radial-gradient(ellipse at 15% 5%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 85% 15%, rgba(139, 92, 246, 0.07) 0%, transparent 45%),
-        radial-gradient(ellipse at 50% 90%, rgba(59, 130, 246, 0.05) 0%, transparent 50%) !important;
     color: var(--text-pure) !important;
     min-height: 100vh;
 }
 
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewBlockContainer"],
-[data-testid="stMain"],
-section.main,
-.main,
-div[class*="stMain"],
-div[class*="appview-container"],
-div[class*="stAppViewContainer"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    flex: 1 1 auto !important;
+/* Sidebar is a clean fixed column */
+section[data-testid="stSidebar"] {
+    min-width: 260px !important;
+    max-width: 280px !important;
+    box-sizing: border-box !important;
 }
 
-/* Force Block Container to Expand Completely */
+/* Main content occupies the remaining viewport without 100% + sidebar overflow */
+section[data-testid="stMain"],
+section.main,
+.main {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+}
+
+/* Unified Center Content Container for All Modules */
 .block-container,
 [data-testid="stMainBlockContainer"],
-[data-testid="block-container"],
-div[class*="stMainBlockContainer"],
-div[class*="block-container"],
-section.main > div:has(.block-container),
-section.main > div {
-    max-width: 100% !important;
+[data-testid="block-container"] {
+    max-width: 960px !important;
     width: 100% !important;
     min-width: 0 !important;
-    padding-top: 1.2rem !important;
-    padding-bottom: 2rem !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+    margin: 0 auto !important;
+    padding: 1.5rem 1.2rem 3rem 1.2rem !important;
     box-sizing: border-box !important;
 }
 
@@ -407,4 +398,41 @@ div.stButton > button[key*="btn_qa_"]:hover {
     0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.5; }
     33% { transform: translate(35px, -20px) scale(1.08); opacity: 0.7; }
     66% { transform: translate(-20px, 18px) scale(0.94); opacity: 0.45; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLOBAL STABLE LAYOUT & CONTAINER ISOLATION
+   ═══════════════════════════════════════════════════════════════════ */
+
+html {
+    scroll-behavior: smooth !important;
+}
+
+/* Enforce 100% width on all input textareas and prevent character-by-character wrapping */
+.stTextArea,
+.stTextArea > div,
+.stTextArea textarea,
+div[data-baseweb="textarea"],
+textarea {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    white-space: pre-wrap !important;
+    writing-mode: horizontal-tb !important;
+    letter-spacing: normal !important;
+    line-height: 1.5 !important;
+}
+
+.stChatMessage, [data-testid="stChatMessage"], .cyber-card, .chat-answer-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+p, span, div, h1, h2, h3, h4, h5, h6, a {
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
 }
