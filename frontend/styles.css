@@ -69,6 +69,12 @@ html, body, [data-testid="stApp"], .stApp {
     min-height: 100vh;
 }
 
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"] {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
 /* Sidebar is a clean fixed column */
 section[data-testid="stSidebar"] {
     min-width: 260px !important;
@@ -76,19 +82,19 @@ section[data-testid="stSidebar"] {
     box-sizing: border-box !important;
 }
 
-/* Main content occupies the remaining viewport without 100% + sidebar overflow */
+/* Main content occupies the full remaining viewport */
 section[data-testid="stMain"],
 section.main,
 .main {
     flex: 1 1 auto !important;
     min-width: 0 !important;
-    width: auto !important;
+    width: 100% !important;
     max-width: 100% !important;
     overflow-x: hidden !important;
     box-sizing: border-box !important;
 }
 
-/* Unified Center Content Container for All Modules */
+/* Unified Full-Width Content Container for All Modules */
 .block-container,
 [data-testid="stMainBlockContainer"],
 [data-testid="block-container"] {
@@ -96,7 +102,7 @@ section.main,
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 !important;
-    padding: 1.2rem 2rem 3rem 2rem !important;
+    padding: 1.2rem 2.2rem 3rem 2.2rem !important;
     box-sizing: border-box !important;
     opacity: 1 !important;
     filter: none !important;
