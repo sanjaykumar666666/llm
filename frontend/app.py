@@ -159,65 +159,6 @@ else:
         """,
         unsafe_allow_html=True,
     )
-        div[data-testid="stChatInput"],
-        div[data-testid="stChatInputContainer"],
-        .stChatInputContainer {
-            background: #FFFFFF !important;
-            border: 1px solid #CBD5E1 !important;
-            box-shadow: 0 4px 16px rgba(15,23,42,0.06) !important;
-        }
-        div[data-testid="stChatInput"] textarea,
-        .stChatInputContainer textarea {
-            background: #FFFFFF !important;
-            color: #0F172A !important;
-        }
-        div[data-testid="stMetric"] {
-            background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-        }
-        div[data-testid="stMetricValue"] {
-            color: #0F172A !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        """
-        <style>
-        :root {
-            --bg-void: #050914;
-            --bg-surface: #08111F;
-            --bg-card: rgba(13, 23, 41, 0.85);
-            --bg-card2: #101C31;
-            --bg-card3: #111D34;
-            --bg-input: #0A1324;
-            --text-pure: #F8FAFC;
-            --text-muted: #94A3B8;
-            --border: rgba(255, 255, 255, 0.09);
-            --border-blue: rgba(59, 130, 246, 0.30);
-            --border-cyan: rgba(6, 182, 212, 0.40);
-            --bg-sidebar: linear-gradient(180deg, #050d1e 0%, #08162d 40%, #0b1c38 100%);
-            --bg-sidebar-base: #050d1e;
-            --border-sidebar: rgba(59, 130, 246, 0.20);
-            --shadow-sidebar: 4px 0 40px rgba(0, 0, 0, 0.6);
-            --btn-sidebar-bg: rgba(10, 25, 48, 0.65);
-            --btn-sidebar-color: #94A3B8;
-            --btn-sidebar-border: rgba(59, 130, 246, 0.14);
-            --btn-sidebar-hover-bg: rgba(6, 182, 212, 0.14);
-            --btn-sidebar-hover-color: #F8FAFC;
-            --btn-sidebar-hover-border: rgba(6, 182, 212, 0.45);
-        }
-        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
-            background: #050914 !important;
-            background-color: #050914 !important;
-            color: #F8FAFC !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 # Import Sidebar
 from frontend.components.sidebar import render_sidebar
