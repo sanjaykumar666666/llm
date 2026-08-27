@@ -35,36 +35,35 @@ if st.session_state.get("theme") == "light":
         """
         <style>
         :root {
-            --bg-void: #f8fbff;
+            --bg-void: #F8FAFC;
             --bg-surface: #FFFFFF;
-            --bg-card: rgba(255,255,255,0.78);
-            --bg-input: #F1F5F9;
+            --bg-card: #FFFFFF;
+            --bg-card2: #F1F5F9;
+            --bg-card3: #E2E8F0;
+            --bg-input: #FFFFFF;
             --text-pure: #0F172A;
             --text-muted: #64748B;
-            --border: rgba(203, 213, 225, 0.6);
-            --border-blue: rgba(59, 130, 246, 0.25);
-            --border-cyan: rgba(6, 182, 212, 0.35);
+            --border: rgba(203, 213, 225, 0.7);
+            --border-blue: rgba(59, 130, 246, 0.35);
+            --border-cyan: rgba(6, 182, 212, 0.4);
+            --bg-sidebar: #FFFFFF;
+            --bg-sidebar-base: #FFFFFF;
+            --border-sidebar: #E2E8F0;
+            --shadow-sidebar: 2px 0 20px rgba(0, 0, 0, 0.04);
+            --btn-sidebar-bg: #F8FAFC;
+            --btn-sidebar-color: #334155;
+            --btn-sidebar-border: #E2E8F0;
+            --btn-sidebar-hover-bg: #EFF6FF;
+            --btn-sidebar-hover-color: #1D4ED8;
+            --btn-sidebar-hover-border: #93C5FD;
         }
-        .stApp {
-            background:
-                radial-gradient(circle at 10% 10%, rgba(110,180,255,0.16), transparent 30%),
-                radial-gradient(circle at 90% 20%, rgba(180,120,255,0.14), transparent 30%),
-                radial-gradient(circle at 50% 80%, rgba(255,160,200,0.08), transparent 40%),
-                radial-gradient(circle at 30% 60%, rgba(100,220,220,0.06), transparent 35%),
-                linear-gradient(135deg, #f8fbff 0%, #f4f1ff 50%, #fdf2f8 100%) !important;
-            background-color: #f8fbff !important;
+        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
+            background: #F8FAFC !important;
+            background-color: #F8FAFC !important;
             color: #0F172A !important;
         }
         .stApp::before {
-            content: '';
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background:
-                radial-gradient(300px circle at 20% 30%, rgba(110,180,255,0.08), transparent),
-                radial-gradient(250px circle at 80% 60%, rgba(180,120,255,0.06), transparent);
-            pointer-events: none;
-            z-index: 0;
-            animation: soc-float-blob 20s ease-in-out infinite;
+            display: none !important;
         }
         div[data-testid="stSidebarNav"],
         section[data-testid="stSidebar"],
@@ -72,107 +71,148 @@ if st.session_state.get("theme") == "light":
         div[data-testid="stSidebarContent"],
         div[data-testid="stSidebarUserContent"],
         div[data-testid="stSidebarHeader"],
-        [data-testid="stSidebar"],
-        .st-emotion-cache-1cypcdb,
-        .st-emotion-cache-6qob1r,
-        .st-emotion-cache-12fmwca,
-        .st-emotion-cache-1r6slb0 {
-            background: linear-gradient(180deg, #FFFFFF 0%, #F0F4FF 40%, #F8F6FF 100%) !important;
+        [data-testid="stSidebar"] {
+            background: #FFFFFF !important;
             background-color: #FFFFFF !important;
-            border-right: 1px solid rgba(203, 213, 225, 0.5) !important;
-            box-shadow: 2px 0 24px rgba(15, 23, 42, 0.06), inset -1px 0 0 rgba(203,213,225,0.3) !important;
+            border-right: 1px solid #E2E8F0 !important;
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.03) !important;
         }
         section[data-testid="stSidebar"] button,
         section[data-testid="stSidebar"] .stButton > button,
         section[data-testid="stSidebar"] [data-testid="baseButton-secondary"],
         div[data-testid="stSidebar"] button,
         div[data-testid="stSidebar"] .stButton button {
-            background: rgba(241, 245, 249, 0.85) !important;
-            background-color: rgba(241, 245, 249, 0.85) !important;
-            color: #475569 !important;
-            border: 1px solid rgba(203, 213, 225, 0.5) !important;
+            background: #F8FAFC !important;
+            background-color: #F8FAFC !important;
+            color: #334155 !important;
+            border: 1px solid #E2E8F0 !important;
         }
         section[data-testid="stSidebar"] button:hover,
         div[data-testid="stSidebar"] button:hover {
-            background: rgba(59, 130, 246, 0.08) !important;
-            color: #0F172A !important;
-            border-color: rgba(59, 130, 246, 0.4) !important;
-            box-shadow: 0 0 16px rgba(59, 130, 246, 0.15) !important;
+            background: #EFF6FF !important;
+            color: #1D4ED8 !important;
+            border-color: #93C5FD !important;
         }
         section[data-testid="stSidebar"] [data-testid="baseButton-primary"],
-        div[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
-            background: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%) !important;
+        section[data-testid="stSidebar"] button[kind="primary"],
+        div[data-testid="stSidebar"] [data-testid="baseButton-primary"],
+        div[data-testid="stSidebar"] button[kind="primary"] {
+            background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%) !important;
             background-color: #2563EB !important;
             color: #FFFFFF !important;
-            border: 1px solid rgba(147,197,253,0.5) !important;
-            border-left: 3.5px solid #2563EB !important;
-            box-shadow: 0 4px 18px rgba(37, 99, 235, 0.3), 0 0 20px rgba(139,92,246,0.15) !important;
+            border: 1px solid #2563EB !important;
+            border-left: 4px solid #1D4ED8 !important;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25) !important;
         }
         .stTextArea textarea,
         .stTextInput input {
-            background: rgba(255,255,255,0.9) !important;
+            background: #FFFFFF !important;
             color: #0F172A !important;
-            border: 1px solid rgba(203, 213, 225, 0.7) !important;
-            backdrop-filter: blur(8px) !important;
-        }
-        div.stButton > button[data-testid="baseButton-primary"]:not(
-            section[data-testid="stSidebar"] *
-        ) {
-            background: linear-gradient(135deg, #2563EB, #7C3AED) !important;
-            box-shadow: 0 4px 16px rgba(37,99,235,0.25) !important;
-        }
-        div.stButton > button[data-testid="baseButton-secondary"]:not(
-            section[data-testid="stSidebar"] *
-        ) {
-            background: rgba(241,245,249,0.8) !important;
-            color: #475569 !important;
-            border: 1px solid rgba(203,213,225,0.6) !important;
+            border: 1px solid #CBD5E1 !important;
         }
         div[data-testid="stExpander"] {
-            background: rgba(241,245,249,0.7) !important;
-            border: 1px solid rgba(203,213,225,0.5) !important;
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
         }
         code, pre {
             background: #F1F5F9 !important;
-            border: 1px solid rgba(203,213,225,0.5) !important;
+            border: 1px solid #E2E8F0 !important;
             color: #1E40AF !important;
         }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --bg-void: #050914;
+            --bg-surface: #08111F;
+            --bg-card: rgba(13, 23, 41, 0.85);
+            --bg-card2: #101C31;
+            --bg-card3: #111D34;
+            --bg-input: #0A1324;
+            --text-pure: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border: rgba(255, 255, 255, 0.09);
+            --border-blue: rgba(59, 130, 246, 0.30);
+            --border-cyan: rgba(6, 182, 212, 0.40);
+            --bg-sidebar: linear-gradient(180deg, #050d1e 0%, #08162d 40%, #0b1c38 100%);
+            --bg-sidebar-base: #050d1e;
+            --border-sidebar: rgba(59, 130, 246, 0.20);
+            --shadow-sidebar: 4px 0 40px rgba(0, 0, 0, 0.6);
+            --btn-sidebar-bg: rgba(10, 25, 48, 0.65);
+            --btn-sidebar-color: #94A3B8;
+            --btn-sidebar-border: rgba(59, 130, 246, 0.14);
+            --btn-sidebar-hover-bg: rgba(6, 182, 212, 0.14);
+            --btn-sidebar-hover-color: #F8FAFC;
+            --btn-sidebar-hover-border: rgba(6, 182, 212, 0.45);
+        }
+        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
+            background: #050914 !important;
+            background-color: #050914 !important;
+            color: #F8FAFC !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
         div[data-testid="stChatInput"],
         div[data-testid="stChatInputContainer"],
         .stChatInputContainer {
-            background: rgba(255,255,255,0.85) !important;
-            border: 1px solid rgba(59,130,246,0.25) !important;
+            background: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
             box-shadow: 0 4px 16px rgba(15,23,42,0.06) !important;
         }
         div[data-testid="stChatInput"] textarea,
         .stChatInputContainer textarea {
-            background: rgba(255,255,255,0.85) !important;
+            background: #FFFFFF !important;
             color: #0F172A !important;
         }
         div[data-testid="stMetric"] {
-            background: rgba(255,255,255,0.8) !important;
-            border: 1px solid rgba(203,213,225,0.5) !important;
+            background: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
         }
         div[data-testid="stMetricValue"] {
             color: #0F172A !important;
         }
-        div[data-testid="stAlert"][kind="warning"],
-        div.stAlert[data-baseweb="notification"][kind="warning"] {
-            background: rgba(255,251,235,0.8) !important;
-            color: #92400E !important;
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --bg-void: #050914;
+            --bg-surface: #08111F;
+            --bg-card: rgba(13, 23, 41, 0.85);
+            --bg-card2: #101C31;
+            --bg-card3: #111D34;
+            --bg-input: #0A1324;
+            --text-pure: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border: rgba(255, 255, 255, 0.09);
+            --border-blue: rgba(59, 130, 246, 0.30);
+            --border-cyan: rgba(6, 182, 212, 0.40);
+            --bg-sidebar: linear-gradient(180deg, #050d1e 0%, #08162d 40%, #0b1c38 100%);
+            --bg-sidebar-base: #050d1e;
+            --border-sidebar: rgba(59, 130, 246, 0.20);
+            --shadow-sidebar: 4px 0 40px rgba(0, 0, 0, 0.6);
+            --btn-sidebar-bg: rgba(10, 25, 48, 0.65);
+            --btn-sidebar-color: #94A3B8;
+            --btn-sidebar-border: rgba(59, 130, 246, 0.14);
+            --btn-sidebar-hover-bg: rgba(6, 182, 212, 0.14);
+            --btn-sidebar-hover-color: #F8FAFC;
+            --btn-sidebar-hover-border: rgba(6, 182, 212, 0.45);
         }
-        div[data-testid="stAlert"][kind="error"],
-        div.stAlert[data-baseweb="notification"][kind="error"] {
-            background: rgba(254,242,242,0.8) !important;
-            color: #991B1B !important;
-        }
-        div[data-testid="stAlert"][kind="success"] {
-            background: rgba(236,253,245,0.8) !important;
-            color: #065F46 !important;
-        }
-        div[data-testid="stInfo"] {
-            background: rgba(239,246,255,0.8) !important;
-            color: #1E40AF !important;
+        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
+            background: #050914 !important;
+            background-color: #050914 !important;
+            color: #F8FAFC !important;
         }
         </style>
         """,
