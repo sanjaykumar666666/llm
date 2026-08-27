@@ -489,6 +489,28 @@ class VideoPrivacyService:
                     "priority": "CRITICAL"
                 })
 
+            # Identity: Passport
+            if re.search(r'\b[A-PR-WYa-pr-wy][1-9]\d\s?\d{4}[1-9]\b', txt) or ("passport" in txt.lower() and re.search(r'[A-Z0-9]{8,9}', txt)):
+                detections.append({
+                    "category": "IDENTITY",
+                    "type": "PASSPORT_NUMBER",
+                    "description": "Passport Document Number",
+                    "bbox": l_bbox,
+                    "confidence": max(l_conf, 0.94),
+                    "priority": "CRITICAL"
+                })
+
+            # Identity: Driving License
+            if re.search(r'\b[A-Z]{2}[-\s]?\d{2}[-\s]?(?:19|20)?\d{2}[-\s]?\d{7}\b', txt) or ("driving" in txt.lower() and re.search(r'[A-Z0-9]{10,16}', txt)):
+                detections.append({
+                    "category": "IDENTITY",
+                    "type": "DRIVING_LICENSE",
+                    "description": "Driving License Number",
+                    "bbox": l_bbox,
+                    "confidence": max(l_conf, 0.92),
+                    "priority": "HIGH"
+                })
+
             # Authentication: Password
             if re.search(r'\b(?:password|passwd|pwd)\b', txt, re.IGNORECASE):
                 detections.append({
@@ -589,14 +611,16 @@ class VideoPrivacyService:
                     if faces is not None:
                         for face in faces:
                             fx, fy, fw, fh = int(face[0]), int(face[1]), int(face[2]), int(face[3])
-                            detections.append({
-                                "category": "BIOMETRIC",
-                                "type": "HUMAN_FACE",
-                                "description": "Human Face Biometric Identity",
-                                "bbox": [max(0, fx), max(0, fy), min(w, fx + fw), min(h, fy + fh)],
-                                "confidence": 0.96,
-                                "priority": "HIGH"
-                            })
+                            conf = float(face[14]) if len(face) > 14 else 0.90
+                            if conf >= 0.40 and fw > 10 and fh > 10 and fw < (w * 0.95) and fh < (h * 0.95):
+                                detections.append({
+                                    "category": "BIOMETRIC",
+                                    "type": "HUMAN_FACE",
+                                    "description": "Human Face Biometric Identity",
+                                    "bbox": [max(0, fx), max(0, fy), min(w, fx + fw), min(h, fy + fh)],
+                                    "confidence": round(conf, 2),
+                                    "priority": "HIGH"
+                                })
             except Exception:
                 pass
 
