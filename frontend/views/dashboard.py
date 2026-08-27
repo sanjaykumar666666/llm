@@ -127,7 +127,7 @@ def render_dashboard_view() -> None:
     safe_interactions_num = 3645 + real_allowed
 
     # ── 3. DASHBOARD HEADER ON ONE SEAMLESS LINE ──────────────────────────────
-    head_col_left, head_col_status, head_col_t1, head_col_t2 = st.columns([3.8, 3.8, 1.2, 1.2])
+    head_col_left, head_col_status, head_col_t1, head_col_t2 = st.columns([3.5, 4.5, 1.0, 1.0])
     logo_b64 = _get_logo_b64()
     logo_img_tag = f"""<img src="{logo_b64}" style="width:38px; height:38px; border-radius:9px; object-fit:contain; box-shadow:0 0 16px rgba(56,189,248,0.4); border:1px solid rgba(56,189,248,0.3); flex-shrink:0;" alt="Logo" />""" if logo_b64 else ""
 

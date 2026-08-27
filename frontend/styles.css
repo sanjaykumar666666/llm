@@ -92,11 +92,11 @@ section.main,
 .block-container,
 [data-testid="stMainBlockContainer"],
 [data-testid="block-container"] {
-    max-width: 960px !important;
+    max-width: 1360px !important;
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 auto !important;
-    padding: 1.5rem 1.2rem 3rem 1.2rem !important;
+    padding: 1.5rem 1.5rem 3rem 1.5rem !important;
     box-sizing: border-box !important;
 }
 

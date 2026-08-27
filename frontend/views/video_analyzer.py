@@ -171,12 +171,6 @@ def render_video_analyzer_view() -> None:
 
         if needs_processing:
             with st.spinner("🎥 Executing Keyframe Sampling, OCR, Face Detection, Temporal Tracking & Pixel Protection…"):
-                progress_bar = st.progress(0, text="Initializing video privacy scanner…")
-                time.sleep(0.1)
-                progress_bar.progress(35, text="Sampling keyframes & running OCR entity detection…")
-                time.sleep(0.1)
-                progress_bar.progress(70, text="Tracking moving regions & applying pixel protection…")
-
                 pipeline_res = VideoPrivacyService.execute_video_privacy_pipeline(
                     video_bytes=file_bytes,
                     filename=file_name,
@@ -186,10 +180,6 @@ def render_video_analyzer_view() -> None:
                     remove_audio=remove_audio,
                     sampling_fps=sampling_rate,
                 )
-                progress_bar.progress(100, text="Verification complete!")
-                time.sleep(0.1)
-                progress_bar.empty()
-
                 st.session_state["vid_result_cache"] = pipeline_res
                 st.session_state["vid_result_cache_key"] = cache_key
         else:
