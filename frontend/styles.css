@@ -45,6 +45,11 @@ p, span, div, h1, h2, h3, h4, h5, h6 {
     overflow-wrap: break-word !important;
 }
 
+button, [data-testid*="baseButton"], [data-testid*="stBaseButton"], .stButton > button {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+}
+
 /* ── Hide Streamlit Chrome ───────────────────────────────────────── */
 #MainMenu, footer,
 header[data-testid="stHeader"],

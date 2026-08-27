@@ -119,7 +119,7 @@ def render_dashboard_view() -> None:
     logo_b64 = _get_logo_b64()
     logo_tag = f'<img src="{logo_b64}" style="width:40px;height:40px;border-radius:10px;object-fit:contain;box-shadow:0 0 16px rgba(56,189,248,0.4);border:1px solid rgba(56,189,248,0.3);flex-shrink:0;" alt="Logo"/>' if logo_b64 else ""
 
-    col_head_info, col_head_btns = st.columns([8.2, 1.8])
+    col_head_info, col_head_btns = st.columns([7.8, 2.2])
 
     with col_head_info:
         _render(f"""
