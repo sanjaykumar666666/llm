@@ -2,14 +2,14 @@
 AI Privacy Shield — Precision Enterprise SOC Dashboard.
 File: frontend/views/dashboard.py
 
-Pure Native HTML Rendering via st.html():
-- Zero Markdown parsing glitches
-- No vertical text wrapping
-- Locked fluid grid alignment
-- Instant high-contrast Light/Dark mode responsiveness
+High-Fidelity Rendering System:
+- Full Vector SVG Icons & Sparklines (zero DOMPurify stripping)
+- Unwrapped fluid typography & pure CSS Grid layout
+- 100% Full-width responsive canvas
 """
 
 import base64
+import re
 from pathlib import Path
 from typing import Dict, Any, List
 import streamlit as st
@@ -28,9 +28,10 @@ def _get_logo_b64() -> str:
     return ""
 
 
-def _render(html_content: str) -> None:
-    """Render pure raw HTML using native st.html() to prevent Markdown parser interference."""
-    st.html(html_content)
+def _render(raw_html: str) -> None:
+    """Collapses inter-tag whitespace and renders raw HTML via st.markdown to preserve SVGs and CSS grids."""
+    compact_html = re.sub(r">\s+<", "><", raw_html.strip())
+    st.markdown(compact_html, unsafe_allow_html=True)
 
 
 def render_dashboard_view() -> None:
@@ -122,7 +123,7 @@ def render_dashboard_view() -> None:
 
     with col_head_info:
         _render(f"""
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">
             <div style="display:flex;align-items:center;gap:14px;">
                 {logo_tag}
                 <div>
@@ -166,10 +167,10 @@ def render_dashboard_view() -> None:
 
     # ── 4. ROW 1: 4 KPI CARDS ─────────────────────────────────────────────────
     kpi_svg = {
-        "scans":   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-        "threats": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-        "alerts":  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-        "safe":    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        "scans":   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+        "threats": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+        "alerts":  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+        "safe":    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
     }
 
     kpis = [
@@ -257,9 +258,9 @@ def render_dashboard_view() -> None:
             <div style="display:flex;justify-content:center;align-items:center;padding:4px 0 8px 0;">
                 <div style="position:relative;width:140px;height:140px;">
                     <svg width="140" height="140" viewBox="0 0 160 160">
-                        <circle cx="80" cy="80" r="64" stroke="{T['ring_track']}" stroke-width="12" fill="none"/>
-                        <circle cx="80" cy="80" r="64" stroke="url(#socRingGrad)" stroke-width="12" stroke-dasharray="402.1" stroke-dashoffset="8" stroke-linecap="round" fill="none" transform="rotate(-90 80 80)"/>
-                        <defs><linearGradient id="socRingGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06B6D4"/><stop offset="30%" stop-color="#3B82F6"/><stop offset="60%" stop-color="#8B5CF6"/><stop offset="100%" stop-color="#10B981"/></linearGradient></defs>
+                        <circle cx="80" cy="80" r="64" stroke="{T['ring_track']}" stroke-width="12" fill="none"></circle>
+                        <circle cx="80" cy="80" r="64" stroke="url(#socRingGrad)" stroke-width="12" stroke-dasharray="402.1" stroke-dashoffset="8" stroke-linecap="round" fill="none" transform="rotate(-90 80 80)"></circle>
+                        <defs><linearGradient id="socRingGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#06B6D4"></stop><stop offset="30%" stop-color="#3B82F6"></stop><stop offset="60%" stop-color="#8B5CF6"></stop><stop offset="100%" stop-color="#10B981"></stop></linearGradient></defs>
                     </svg>
                     <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                         <span style="color:{T['title_color']};font-size:32px;font-weight:900;letter-spacing:-1px;line-height:1;">98%</span>
@@ -291,19 +292,19 @@ def render_dashboard_view() -> None:
                 </div>
                 <div style="flex-shrink:0;display:flex;justify-content:center;align-items:center;">
                     <svg width="130" height="130" viewBox="0 0 140 140" fill="none">
-                        <circle cx="70" cy="70" r="62" stroke="{'rgba(139,92,246,0.25)' if is_dark else 'rgba(139,92,246,0.15)'}" stroke-width="1" stroke-dasharray="4 6"/>
-                        <circle cx="70" cy="70" r="50" stroke="{'rgba(6,182,212,0.3)' if is_dark else 'rgba(6,182,212,0.2)'}" stroke-width="1.2"/>
-                        <line x1="70" y1="15" x2="25" y2="55" stroke="#8B5CF6" stroke-width="1.5" opacity="{line_op}"/>
-                        <line x1="70" y1="15" x2="115" y2="55" stroke="#06B6D4" stroke-width="1.5" opacity="{line_op}"/>
-                        <line x1="25" y1="55" x2="40" y2="110" stroke="#3B82F6" stroke-width="1.5" opacity="{line_op}"/>
-                        <line x1="115" y1="55" x2="100" y2="110" stroke="#EC4899" stroke-width="1.5" opacity="{line_op}"/>
-                        <line x1="40" y1="110" x2="100" y2="110" stroke="#10B981" stroke-width="1.2" opacity="{line_op}"/>
-                        <line x1="70" y1="15" x2="70" y2="70" stroke="#06B6D4" stroke-width="2" opacity="0.75"/>
-                        <line x1="70" y1="70" x2="40" y2="110" stroke="#8B5CF6" stroke-width="1.5" opacity="{line_op}"/>
-                        <line x1="70" y1="70" x2="100" y2="110" stroke="#3B82F6" stroke-width="1.5" opacity="{line_op}"/>
-                        <circle cx="70" cy="15" r="5" fill="#06B6D4"/><circle cx="25" cy="55" r="4.5" fill="#8B5CF6"/>
-                        <circle cx="115" cy="55" r="4.5" fill="#EC4899"/><circle cx="40" cy="110" r="4" fill="#3B82F6"/>
-                        <circle cx="100" cy="110" r="4" fill="#10B981"/><circle cx="70" cy="70" r="8" fill="#3B82F6"/>
+                        <circle cx="70" cy="70" r="62" stroke="{'rgba(139,92,246,0.25)' if is_dark else 'rgba(139,92,246,0.15)'}" stroke-width="1" stroke-dasharray="4 6"></circle>
+                        <circle cx="70" cy="70" r="50" stroke="{'rgba(6,182,212,0.3)' if is_dark else 'rgba(6,182,212,0.2)'}" stroke-width="1.2"></circle>
+                        <line x1="70" y1="15" x2="25" y2="55" stroke="#8B5CF6" stroke-width="1.5" opacity="{line_op}"></line>
+                        <line x1="70" y1="15" x2="115" y2="55" stroke="#06B6D4" stroke-width="1.5" opacity="{line_op}"></line>
+                        <line x1="25" y1="55" x2="40" y2="110" stroke="#3B82F6" stroke-width="1.5" opacity="{line_op}"></line>
+                        <line x1="115" y1="55" x2="100" y2="110" stroke="#EC4899" stroke-width="1.5" opacity="{line_op}"></line>
+                        <line x1="40" y1="110" x2="100" y2="110" stroke="#10B981" stroke-width="1.2" opacity="{line_op}"></line>
+                        <line x1="70" y1="15" x2="70" y2="70" stroke="#06B6D4" stroke-width="2" opacity="0.75"></line>
+                        <line x1="70" y1="70" x2="40" y2="110" stroke="#8B5CF6" stroke-width="1.5" opacity="{line_op}"></line>
+                        <line x1="70" y1="70" x2="100" y2="110" stroke="#3B82F6" stroke-width="1.5" opacity="{line_op}"></line>
+                        <circle cx="70" cy="15" r="5" fill="#06B6D4"></circle><circle cx="25" cy="55" r="4.5" fill="#8B5CF6"></circle>
+                        <circle cx="115" cy="55" r="4.5" fill="#EC4899"></circle><circle cx="40" cy="110" r="4" fill="#3B82F6"></circle>
+                        <circle cx="100" cy="110" r="4" fill="#10B981"></circle><circle cx="70" cy="70" r="8" fill="#3B82F6"></circle>
                     </svg>
                 </div>
             </div>

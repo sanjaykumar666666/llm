@@ -86,12 +86,7 @@ section[data-testid="stSidebar"] {
 section[data-testid="stMain"],
 section.main,
 .main,
-[data-testid="stMainBlockContainer"],
-.block-container,
-[data-testid="block-container"],
-div[data-testid="stVerticalBlock"],
-div[data-testid="stVerticalBlockBorderWrapper"],
-div[data-testid="stAppViewContainer"] section.main {
+[data-testid="stAppViewContainer"] section.main {
     flex: 1 1 auto !important;
     min-width: 0 !important;
     width: 100% !important;
@@ -100,14 +95,21 @@ div[data-testid="stAppViewContainer"] section.main {
 }
 
 /* Unified Full-Width Content Container for All Modules */
+.main .block-container,
+[data-testid="stAppViewContainer"] .block-container,
 .block-container,
 [data-testid="stMainBlockContainer"],
-[data-testid="block-container"] {
+[data-testid="block-container"],
+.st-emotion-cache-1jicfl2,
+.st-emotion-cache-1wmy9hl,
+.st-emotion-cache-zy652,
+.st-emotion-cache-13ln4jf,
+.st-emotion-cache-1dp5vir {
     max-width: 100% !important;
     width: 100% !important;
-    min-width: 0 !important;
+    min-width: 100% !important;
     margin: 0 !important;
-    padding: 1.2rem 2.5rem 3rem 2.5rem !important;
+    padding: 1.2rem 2.2rem 3rem 2.2rem !important;
     box-sizing: border-box !important;
     opacity: 1 !important;
     filter: none !important;
