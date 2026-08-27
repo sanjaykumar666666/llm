@@ -227,8 +227,7 @@ def render_dashboard_view() -> None:
 
     _render_html(f"<div style='height:1px; background:linear-gradient(90deg, transparent, {T['divider']}, transparent); margin:12px 0 20px 0;'></div>")
 
-    # ── 4. FOUR KPI TILES (CSS GRID) ──────────────────────────────────────────
-    kpi_cards_html = ""
+    # ── 4. FOUR KPI TILES (NATIVE ST.COLUMNS) ─────────────────────────────────
     kpi_data = [
         ("TOTAL SCANS", total_scans_num, "↑ 18.7%", "vs last 7 days", "🔍",
          T['kpi1_bg'], T['kpi1_border'], T['kpi1_glow'], T['kpi1_icon_bg'], T['kpi1_sparkline'], T['kpi1_text'], T['kpi1_accent'],
@@ -244,29 +243,32 @@ def render_dashboard_view() -> None:
          "M2 22 L12 18 L22 15 L32 12 L42 10 L52 8 L62 5 L72 2", True),
     ]
 
-    for label, value, trend, trend_sub, icon, bg, border, glow, icon_bg, sparkline_color, text_color, accent, path, is_up in kpi_data:
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    kpi_cols = [col_kpi1, col_kpi2, col_kpi3, col_kpi4]
+
+    for col, (label, value, trend, trend_sub, icon, bg, border, glow, icon_bg, sparkline_color, text_color, accent, path, is_up) in zip(kpi_cols, kpi_data):
         trend_color = text_color if is_up else "#F59E0B"
-        kpi_cards_html += f"""
+        card_html = f"""
         <div style="
             background:{bg}; border:1.5px solid {border}; border-radius:{T['card_radius']};
             padding:18px 18px; box-shadow:{T['card_shadow']}, {glow};
             min-height:155px; display:flex; flex-direction:column; justify-content:space-between;
             {T['backdrop']}
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative; overflow: hidden; width:100%; min-width:0;
+            position: relative; overflow: hidden; width:100%; box-sizing:border-box;
         " onmouseover="this.style.transform='translateY(-5px) scale(1.015)'; this.style.boxShadow='{T['card_shadow']}, 0 0 45px {accent}40';"
           onmouseout="this.style.transform='none'; this.style.boxShadow='{T['card_shadow']}, {glow}';">
             <div style="position:absolute; top:-25px; right:-25px; width:110px; height:110px; background:radial-gradient(circle, {accent}18, transparent 70%); border-radius:50%; pointer-events:none;"></div>
             <div style="display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1;">
                 <div>
                     <div style="color:{T['text_muted']}; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; white-space:nowrap;">{label}</div>
-                    <div style="color:{T['title_color']}; font-size:35px; font-weight:900; letter-spacing:-1.2px; margin:5px 0 3px 0; line-height:1; white-space:nowrap;">{value:,}</div>
+                    <div style="color:{T['title_color']}; font-size:32px; font-weight:900; letter-spacing:-1.2px; margin:5px 0 3px 0; line-height:1; white-space:nowrap;">{value:,}</div>
                 </div>
                 <div style="
                     background:{icon_bg}; border:1.5px solid {border};
-                    width:46px; height:46px; border-radius:13px;
+                    width:44px; height:44px; border-radius:13px;
                     display:flex; align-items:center; justify-content:center;
-                    font-size:22px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); flex-shrink:0;
+                    font-size:20px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); flex-shrink:0;
                 ">{icon}</div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:flex-end; position:relative; z-index:1; margin-top:8px;">
@@ -274,7 +276,7 @@ def render_dashboard_view() -> None:
                     <span style="color:{trend_color}; font-size:13px; font-weight:800;">{trend}</span>
                     <span style="color:{T['text_muted']}; font-size:10.5px; font-weight:500; margin-left:4px;">{trend_sub}</span>
                 </div>
-                <svg width="78" height="28" viewBox="0 0 80 30" fill="none" style="opacity:0.95; flex-shrink:0;">
+                <svg width="76" height="26" viewBox="0 0 80 30" fill="none" style="opacity:0.95; flex-shrink:0;">
                     <defs>
                         <linearGradient id="sparkFill_{label.replace(' ','')}" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stop-color="{sparkline_color}" stop-opacity="0.35"/>
@@ -287,12 +289,12 @@ def render_dashboard_view() -> None:
             </div>
         </div>
         """
+        with col:
+            _render_html(card_html)
 
-    _render_html(f"""<div class="kpi-grid">{kpi_cards_html}</div>""")
     _render_html("<div style='margin-bottom:20px;'></div>")
 
     # ── 5. ROW 2: MAIN ANALYTICS GRID (30% | 40% | 30%) ───────────────────────
-    # Detections data
     categories = [
         ("🔐", "Authentication", 8, 26, "linear-gradient(90deg, #06B6D4, #3B82F6)", "#0EA5E9"),
         ("💳", "Financial", 9, 29, "linear-gradient(90deg, #F59E0B, #F97316)", "#D97706"),
@@ -320,14 +322,16 @@ def render_dashboard_view() -> None:
     line_op = "0.65" if is_dark else "0.45"
     part_op = "0.6" if is_dark else "0.35"
 
-    _render_html(
-        f"""
-        <div class="analytics-grid">
+    col_an1, col_an2, col_an3 = st.columns([1.0, 1.35, 1.0])
+
+    with col_an1:
+        _render_html(
+            f"""
             <!-- 1. Security Overview (30%) -->
             <div style="
                 background:{T['card_bg']}; border:1.5px solid {T['card_border']};
                 border-radius:{T['card_radius']}; padding:22px; box-shadow:{T['card_shadow']};
-                {T['backdrop']} width:100%; min-width:0; min-height:340px;
+                {T['backdrop']} width:100%; box-sizing:border-box; min-height:340px;
                 display:flex; flex-direction:column; justify-content:space-between;
                 transition: all 0.3s ease;
             " onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 20px 50px rgba(0,0,0,0.3)';"
@@ -393,12 +397,17 @@ def render_dashboard_view() -> None:
                     </div>
                 </div>
             </div>
+            """
+        )
 
+    with col_an2:
+        _render_html(
+            f"""
             <!-- 2. AI Security Insight (40%) -->
             <div class="ai-security-insight" style="
                 background:{T['insight_bg']}; border:1.5px solid {T['insight_border']};
                 border-radius:{T['card_radius']}; padding:22px; box-shadow:{T['card_shadow']};
-                {T['backdrop']} min-height:340px;
+                {T['backdrop']} min-height:340px; box-sizing:border-box; width:100%;
                 display:flex; flex-direction:column; justify-content:space-between;
                 transition: all 0.3s ease; position:relative; overflow:hidden;
             " onmouseover="this.style.transform='translateY(-4px)';"
@@ -476,12 +485,17 @@ def render_dashboard_view() -> None:
                     </div>
                 </div>
             </div>
+            """
+        )
 
+    with col_an3:
+        _render_html(
+            f"""
             <!-- 3. Detections By Category (30%) -->
             <div style="
                 background:{T['card_bg']}; border:1.5px solid {T['card_border']};
                 border-radius:{T['card_radius']}; padding:22px; box-shadow:{T['card_shadow']};
-                {T['backdrop']} width:100%; min-width:0; min-height:340px;
+                {T['backdrop']} width:100%; box-sizing:border-box; min-height:340px;
                 display:flex; flex-direction:column; justify-content:space-between;
                 transition: all 0.3s ease;
             " onmouseover="this.style.transform='translateY(-4px)';"
@@ -493,9 +507,8 @@ def render_dashboard_view() -> None:
                     {detections_rows_html}
                 </div>
             </div>
-        </div>
-        """
-    )
+            """
+        )
 
     _render_html("<div style='margin-bottom:20px;'></div>")
 
@@ -608,7 +621,7 @@ def render_dashboard_view() -> None:
                 transition: all 0.3s ease;
             ">
                 <h3 style="color:{T['title_color']}; font-size:17px; font-weight:800; margin:0 0 14px 0; white-space:nowrap;">Quick Actions</h3>
-                <div class="quick-actions-grid">{qa_cards_html}</div>
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px;">{qa_cards_html}</div>
             </div>
             """
         )
