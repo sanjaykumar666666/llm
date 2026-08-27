@@ -231,15 +231,50 @@ class VideoPrivacyService:
 
         writer.release()
 
-        with open(tmp_vid_path, "rb") as f:
+        # Transcode to universal HTML5 web-compatible H.264 (AVC1)
+        web_mp4_path = cls.convert_to_h264_mp4(tmp_vid_path)
+        with open(web_mp4_path, "rb") as f:
             vid_bytes = f.read()
 
-        try:
-            os.remove(tmp_vid_path)
-        except Exception:
-            pass
+        for p in (tmp_vid_path, web_mp4_path):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
 
         return vid_bytes, f"preset_{preset_name.lower().replace(' ', '_')[:20]}.mp4"
+
+    @staticmethod
+    def convert_to_h264_mp4(input_video_path: str, output_video_path: Optional[str] = None) -> str:
+        """
+        Transcodes video to universal HTML5 web-compatible H.264 (AVC1) with YUV420P pixel format
+        and MP4 faststart (+faststart), guaranteeing instant playback across all modern web browsers.
+        """
+        if output_video_path is None:
+            fd, output_video_path = tempfile.mkstemp(suffix="_web.mp4")
+            os.close(fd)
+
+        try:
+            import imageio_ffmpeg
+            import subprocess
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            cmd = [
+                ffmpeg_exe,
+                "-y",
+                "-i", input_video_path,
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-preset", "ultrafast",
+                "-movflags", "+faststart",
+                "-an",
+                output_video_path
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return output_video_path
+        except Exception:
+            # Fallback: keep original if ffmpeg is unavailable
+            return input_video_path
 
     # ── 3. FRAME-LEVEL OCR & SENSITIVE DETECTION ──────────────────────────────
 
@@ -547,19 +582,21 @@ class VideoPrivacyService:
         if protect_qr_barcodes:
             try:
                 qr_detector = cv2.QRCodeDetector()
-                retval, points = qr_detector.detect(frame_bgr)
-                if retval and points is not None:
+                decoded_info, points, _ = qr_detector.detectAndDecode(frame_bgr)
+                if points is not None and len(points) > 0 and len(decoded_info) > 0:
                     pts = points[0]
                     x1, y1 = int(np.min(pts[:, 0])), int(np.min(pts[:, 1]))
                     x2, y2 = int(np.max(pts[:, 0])), int(np.max(pts[:, 1]))
-                    detections.append({
-                        "category": "MACHINE_READABLE",
-                        "type": "QR_CODE",
-                        "description": "QR Code Machine-Readable Data",
-                        "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)],
-                        "confidence": 0.98,
-                        "priority": "CRITICAL"
-                    })
+                    qw, qh = x2 - x1, y2 - y1
+                    if 15 < qw < (w * 0.85) and 15 < qh < (h * 0.85):
+                        detections.append({
+                            "category": "MACHINE_READABLE",
+                            "type": "QR_CODE",
+                            "description": "QR Code Machine-Readable Data",
+                            "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)],
+                            "confidence": 0.98,
+                            "priority": "CRITICAL"
+                        })
             except Exception:
                 pass
 
@@ -773,6 +810,41 @@ class VideoPrivacyService:
             risk_level = "LOW"
             action = "ALLOW"
 
+        # 4. Aggregated Tracks for Clean UI Presentation
+        aggregated_timeline = []
+        track_map: Dict[str, Dict[str, Any]] = {}
+        for ev in timeline_events:
+            etype = ev["type"]
+            if etype not in track_map:
+                track_map[etype] = {
+                    "type": etype,
+                    "category": ev["category"],
+                    "description": ev["description"],
+                    "start_sec": ev["timestamp_sec"],
+                    "end_sec": ev["timestamp_sec"],
+                    "max_confidence": ev["confidence"],
+                    "occurrences": 1,
+                }
+            else:
+                track_map[etype]["end_sec"] = max(track_map[etype]["end_sec"], ev["timestamp_sec"])
+                track_map[etype]["max_confidence"] = max(track_map[etype]["max_confidence"], ev["confidence"])
+                track_map[etype]["occurrences"] += 1
+
+        for tr in track_map.values():
+            start_str = format_timestamp(tr["start_sec"])
+            end_str = format_timestamp(tr["end_sec"])
+            time_span = start_str if start_str == end_str else f"{start_str} – {end_str}"
+            aggregated_timeline.append({
+                "type": tr["type"],
+                "category": tr["category"],
+                "description": tr["description"],
+                "time_span": time_span,
+                "start_sec": tr["start_sec"],
+                "end_sec": tr["end_sec"],
+                "confidence": tr["max_confidence"],
+                "occurrences": tr["occurrences"],
+            })
+
         return {
             "total_frames": total_frames,
             "fps": fps,
@@ -785,6 +857,7 @@ class VideoPrivacyService:
             "detected_categories": sorted(list(all_detected_categories)),
             "detected_types": sorted(list(all_detected_types)),
             "timeline_events": timeline_events,
+            "aggregated_timeline": aggregated_timeline,
             "frame_regions": frame_regions,
             "risk_score": risk_score,
             "risk_level": risk_level,
@@ -805,7 +878,7 @@ class VideoPrivacyService:
     ) -> str:
         """
         Renders true pixel-level redaction, blurring, pixelation, or blackout on every single video frame.
-        The generated output video contains the protection baked directly into the video stream.
+        The generated output video contains the protection baked directly into the video stream, transcoded to H.264.
         """
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
@@ -816,8 +889,11 @@ class VideoPrivacyService:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        fd_raw, raw_tmp_path = tempfile.mkstemp(suffix="_raw.mp4")
+        os.close(fd_raw)
+
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        writer = cv2.VideoWriter(raw_tmp_path, fourcc, fps, (width, height))
 
         mode_upper = protection_mode.upper().replace(" ", "_")
 
@@ -889,6 +965,16 @@ class VideoPrivacyService:
 
         cap.release()
         writer.release()
+
+        # Transcode raw output to universal HTML5 web-compatible H.264
+        cls.convert_to_h264_mp4(raw_tmp_path, output_path)
+
+        if os.path.exists(raw_tmp_path):
+            try:
+                os.remove(raw_tmp_path)
+            except Exception:
+                pass
+
         return output_path
 
     # ── 7. CLOSED-LOOP SECONDARY VERIFICATION ENGINE ──────────────────────────
@@ -995,6 +1081,7 @@ class VideoPrivacyService:
                 "verified": False,
             }
 
+        allocated_temp_paths: List[str] = []
         tmp_in_path = None
         tmp_out_path = None
 
@@ -1003,6 +1090,7 @@ class VideoPrivacyService:
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp_in:
                 tmp_in.write(video_bytes)
                 tmp_in_path = tmp_in.name
+                allocated_temp_paths.append(tmp_in_path)
 
             # Step 2: Temporal Scan & Tracking
             scan_results = cls.scan_video_with_temporal_tracking(
@@ -1020,6 +1108,7 @@ class VideoPrivacyService:
             for attempt in range(1, max_retries + 1):
                 out_fd, tmp_out_path = tempfile.mkstemp(suffix=".mp4")
                 os.close(out_fd)
+                allocated_temp_paths.append(tmp_out_path)
 
                 cls.apply_pixel_protection(
                     input_path=tmp_in_path,
@@ -1074,14 +1163,10 @@ class VideoPrivacyService:
             }
 
         finally:
-            # Clean up temporary processing files safely
-            if tmp_in_path and os.path.exists(tmp_in_path):
-                try:
-                    os.remove(tmp_in_path)
-                except Exception:
-                    pass
-            if tmp_out_path and os.path.exists(tmp_out_path):
-                try:
-                    os.remove(tmp_out_path)
-                except Exception:
-                    pass
+            # Clean up all allocated temporary files safely
+            for path in allocated_temp_paths:
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass

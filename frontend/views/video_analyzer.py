@@ -16,6 +16,7 @@ import io
 import os
 import time
 import base64
+import hashlib
 from typing import Tuple, List, Dict, Any, Optional
 from datetime import datetime
 import streamlit as st
@@ -155,7 +156,8 @@ def render_video_analyzer_view() -> None:
             sampling_rate = st.slider("Scan FPS:", min_value=1.0, max_value=5.0, value=3.0, step=1.0, key="vid_sampling_fps")
 
         # ── Step 3: Run Video Privacy Shield Pipeline ─────────────────────────
-        cache_key = f"{file_name}_{len(file_bytes)}_{protection_mode}_{protect_faces}_{protect_qr}_{remove_audio}_{sampling_rate}"
+        file_sha256 = hashlib.sha256(file_bytes).hexdigest()[:16] if file_bytes else "empty"
+        cache_key = f"{file_name}_{file_sha256}_{protection_mode}_{protect_faces}_{protect_qr}_{remove_audio}_{sampling_rate}"
 
         col_btn1, col_btn2 = st.columns([1.5, 1])
         with col_btn1:
@@ -235,12 +237,37 @@ def render_video_analyzer_view() -> None:
             # ── Step 5: Chronological Privacy Timeline ────────────────────────
             st.markdown("<div style='font-size:13px; font-weight:800; color:#E2E8F0; margin-top:18px; margin-bottom:6px;'>STEP 4: DETECTED TEMPORAL PRIVACY TIMELINE</div>", unsafe_allow_html=True)
 
+            agg_timeline = scan_res.get("aggregated_timeline", [])
             timeline_events = scan_res.get("timeline_events", [])
-            if timeline_events:
+            
+            if agg_timeline:
                 st.markdown(
-                    f"<div style='font-size:12px; color:#94A3B8; margin-bottom:8px;'>Detected <strong>{len(timeline_events)}</strong> temporal sensitive events across video stream (tracking interpolated across all intermediate frames):</div>",
+                    f"<div style='font-size:12px; color:#94A3B8; margin-bottom:8px;'>Detected <strong>{len(timeline_events)}</strong> sensitive events grouped into <strong>{len(agg_timeline)}</strong> temporal tracks (interpolated across intermediate frames):</div>",
                     unsafe_allow_html=True
                 )
+                for tr in agg_timeline:
+                    tspan = tr.get("time_span", "00:00")
+                    desc = tr.get("description", "Sensitive Entity")
+                    cat = tr.get("category", "SENSITIVE")
+                    conf = tr.get("confidence", 0.95)
+                    occs = tr.get("occurrences", 1)
+
+                    icon = "🪪" if cat == "IDENTITY" else ("💳" if cat == "FINANCIAL" else ("🔑" if cat == "AUTHENTICATION" else ("👤" if cat == "BIOMETRIC" else "📱")))
+                    st.markdown(
+                        f"""
+                        <div style="background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.06); border-radius:6px; padding:6px 12px; margin-bottom:4px; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <strong style="color:#38BDF8; font-family:monospace;">⏱️ {tspan}</strong> &nbsp;
+                                <span>{icon} <strong>{desc}</strong> ({cat})</span>
+                            </div>
+                            <div style="font-size:11px; color:#10B981; font-weight:700;">
+                                TRACKED & PROTECTED ({occs} keyframes | Conf: {int(conf*100)}%)
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            elif timeline_events:
                 for ev in timeline_events:
                     ts = ev.get("timestamp_str", "00:00")
                     desc = ev.get("description", "Sensitive Entity")
