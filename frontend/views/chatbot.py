@@ -599,18 +599,13 @@ def render_chatbot_view():
                 for e in detailed_scan["entities"]:
                     st.write(f"- `{e.get('category', e.get('entity_type'))}`: `{e.get('value', '[MASKED]')}` (Severity: {e.get('severity')})")
 
-    # ── Handle Send Action (Strict Deduplication & Module Isolation) ───────────
+    # ── Handle Send Action (Instant 1st-Click Capture & Execution) ─────────────
     if send_clicked:
-        prompt = (user_prompt or "").strip()
+        input_key = f"chat_message_input_box_{input_nonce}"
+        raw_val = st.session_state.get(input_key, "") or user_prompt or current_preset or ""
+        prompt = (raw_val or "").strip()
         if not prompt:
             st.warning("⚠️ Please type a message before sending.")
-            return
-
-        # Deduplication Guard: Check if the exact message was just appended
-        if messages and messages[-1].get("role") == "user" and messages[-1].get("text") == prompt:
-            # Already submitted, avoid re-submitting duplicate
-            st.session_state["composer_preset_text"] = ""
-            st.session_state["input_nonce"] = input_nonce + 1
             return
 
         msg_turn_id = f"turn-{int(time.time()*1000)}"

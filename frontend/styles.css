@@ -98,6 +98,19 @@ section.main,
     margin: 0 auto !important;
     padding: 1.5rem 1.5rem 3rem 1.5rem !important;
     box-sizing: border-box !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transition: none !important;
+}
+
+/* Disable full-page gray blur on rerun for smooth responsive UI */
+[data-testid="stApp"] [data-testid="stMainBlockContainer"],
+[data-testid="stApp"] [data-testid="block-container"],
+[data-testid="stApp"] .main {
+    opacity: 1 !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    transition: none !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

@@ -13,20 +13,10 @@ BACKEND_API_URL = "http://localhost:8000/api/v1"
 class APIClient:
     """Client for communicating with the Backend REST API Services."""
 
-    _backend_online_cache: Optional[tuple] = None
-
     @classmethod
     def _is_backend_online(cls) -> bool:
-        now = time.time()
-        if cls._backend_online_cache and (now - cls._backend_online_cache[0]) < 5.0:
-            return cls._backend_online_cache[1]
-        try:
-            res = requests.get(f"{BACKEND_API_URL}/health", timeout=0.4)
-            is_online = (res.status_code == 200)
-        except Exception:
-            is_online = False
-        cls._backend_online_cache = (now, is_online)
-        return is_online
+        # Default to direct zero-latency in-process execution within Streamlit
+        return False
 
     @classmethod
     def get_mcp_servers(cls) -> Dict[str, Any]:
@@ -49,12 +39,13 @@ class APIClient:
     @classmethod
     def get_mcp_tools(cls) -> Dict[str, Any]:
         """Fetch list of tools exposed by active MCP servers."""
-        try:
-            res = requests.get(f"{BACKEND_API_URL}/mcp/tools", timeout=2.0)
-            if res.status_code == 200:
-                return res.json()
-        except Exception:
-            pass
+        if cls._is_backend_online():
+            try:
+                res = requests.get(f"{BACKEND_API_URL}/mcp/tools", timeout=0.5)
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
         return {
             "success": True,
             "tools": [
@@ -68,16 +59,17 @@ class APIClient:
     @classmethod
     def call_mcp_tool(cls, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute an MCP tool with Privacy Firewall interception."""
-        try:
-            res = requests.post(
-                f"{BACKEND_API_URL}/mcp/call_tool",
-                json={"tool_name": tool_name, "arguments": arguments or {}},
-                timeout=3.0
-            )
-            if res.status_code == 200:
-                return res.json()
-        except Exception:
-            pass
+        if cls._is_backend_online():
+            try:
+                res = requests.post(
+                    f"{BACKEND_API_URL}/mcp/call_tool",
+                    json={"tool_name": tool_name, "arguments": arguments or {}},
+                    timeout=1.0
+                )
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
 
         # Local fallback execution via backend MCP manager
         from mcp_engine.mcp_client import MCPClientManager
@@ -87,16 +79,17 @@ class APIClient:
     @classmethod
     def get_explainability(cls, modality: str = "Text", content: str = "") -> Dict[str, Any]:
         """AI Explainability & Privacy Insights API endpoint."""
-        try:
-            res = requests.post(
-                f"{BACKEND_API_URL}/explainability",
-                json={"modality": modality, "content": content},
-                timeout=3.0
-            )
-            if res.status_code == 200:
-                return res.json()
-        except Exception:
-            pass
+        if cls._is_backend_online():
+            try:
+                res = requests.post(
+                    f"{BACKEND_API_URL}/explainability",
+                    json={"modality": modality, "content": content},
+                    timeout=1.0
+                )
+                if res.status_code == 200:
+                    return res.json()
+            except Exception:
+                pass
 
         return cls._mock_explainability_response(modality)
 
