@@ -737,7 +737,12 @@ class VideoPrivacyService:
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         duration_sec = total_frames / fps if fps > 0 else 0.0
 
-        sample_step = max(1, int(round(fps / sampling_fps)))
+        # Adaptive keyframe sampling: ensure responsive processing on long videos
+        max_keyframes = 30
+        base_step = int(round(fps / max(0.5, sampling_fps))) if sampling_fps > 0 else int(fps)
+        adaptive_step = max(1, int(total_frames / max_keyframes)) if total_frames > max_keyframes else 1
+        sample_step = max(base_step, adaptive_step)
+        sample_step = max(1, sample_step)
 
         sampled_detections: Dict[int, List[Dict[str, Any]]] = {}
         timeline_events: List[Dict[str, Any]] = []

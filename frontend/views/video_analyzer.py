@@ -163,32 +163,35 @@ def render_video_analyzer_view() -> None:
         with col_btn1:
             run_scan = st.button("🛡️ SCAN & PROTECT VIDEO", type="primary", use_container_width=True, key="btn_run_vid_protect")
 
-        if run_scan or "vid_result_cache" not in st.session_state or st.session_state.get("vid_result_cache_key") != cache_key:
-            if run_scan or "vid_result_cache" not in st.session_state:
-                with st.spinner("🎥 Executing Keyframe Sampling, OCR, Face Detection, Temporal Tracking & Pixel Protection…"):
-                    progress_bar = st.progress(0, text="Initializing video privacy scanner…")
-                    time.sleep(0.1)
-                    progress_bar.progress(35, text="Sampling keyframes & running OCR entity detection…")
-                    time.sleep(0.1)
-                    progress_bar.progress(70, text="Tracking moving regions & applying pixel protection…")
+        needs_processing = (
+            run_scan
+            or "vid_result_cache" not in st.session_state
+            or st.session_state.get("vid_result_cache_key") != cache_key
+        )
 
-                    pipeline_res = VideoPrivacyService.execute_video_privacy_pipeline(
-                        video_bytes=file_bytes,
-                        filename=file_name,
-                        protection_mode=protection_mode,
-                        protect_faces=protect_faces,
-                        protect_qr_barcodes=protect_qr,
-                        remove_audio=remove_audio,
-                        sampling_fps=sampling_rate,
-                    )
-                    progress_bar.progress(100, text="Verification complete!")
-                    time.sleep(0.1)
-                    progress_bar.empty()
+        if needs_processing:
+            with st.spinner("🎥 Executing Keyframe Sampling, OCR, Face Detection, Temporal Tracking & Pixel Protection…"):
+                progress_bar = st.progress(0, text="Initializing video privacy scanner…")
+                time.sleep(0.1)
+                progress_bar.progress(35, text="Sampling keyframes & running OCR entity detection…")
+                time.sleep(0.1)
+                progress_bar.progress(70, text="Tracking moving regions & applying pixel protection…")
 
-                    st.session_state["vid_result_cache"] = pipeline_res
-                    st.session_state["vid_result_cache_key"] = cache_key
-            else:
-                pipeline_res = st.session_state.get("vid_result_cache")
+                pipeline_res = VideoPrivacyService.execute_video_privacy_pipeline(
+                    video_bytes=file_bytes,
+                    filename=file_name,
+                    protection_mode=protection_mode,
+                    protect_faces=protect_faces,
+                    protect_qr_barcodes=protect_qr,
+                    remove_audio=remove_audio,
+                    sampling_fps=sampling_rate,
+                )
+                progress_bar.progress(100, text="Verification complete!")
+                time.sleep(0.1)
+                progress_bar.empty()
+
+                st.session_state["vid_result_cache"] = pipeline_res
+                st.session_state["vid_result_cache_key"] = cache_key
         else:
             pipeline_res = st.session_state.get("vid_result_cache")
 
