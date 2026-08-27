@@ -1,11 +1,12 @@
 """
-AI Privacy Shield — Stable CSS-Grid Dashboard.
+AI Privacy Shield — Precision Enterprise SOC Dashboard.
 File: frontend/views/dashboard.py
 
-Layout Engine:
-  ALL card rows use pure HTML CSS Grid rendered via st.markdown().
-  Only interactive Streamlit buttons use st.columns().
-  This eliminates the alignment-shift-on-every-rerun problem.
+Pure Native HTML Rendering via st.html():
+- Zero Markdown parsing glitches
+- No vertical text wrapping
+- Locked fluid grid alignment
+- Instant high-contrast Light/Dark mode responsiveness
 """
 
 import base64
@@ -27,19 +28,19 @@ def _get_logo_b64() -> str:
     return ""
 
 
-def _html(raw_html: str) -> None:
-    """Render raw HTML through Streamlit, stripping leading whitespace per line."""
-    cleaned = "\n".join(line.strip() for line in raw_html.splitlines() if line.strip())
-    st.markdown(cleaned, unsafe_allow_html=True)
+def _render(html_content: str) -> None:
+    """Render pure raw HTML using native st.html() to prevent Markdown parser interference."""
+    st.html(html_content)
 
 
 def render_dashboard_view() -> None:
-    # ── 1. THEME ─────────────────────────────────────────────────────────────
+    # ── 1. THEME INITIALIZATION ───────────────────────────────────────────────
     if "theme" not in st.session_state:
         st.session_state["theme"] = "dark"
 
     is_dark = st.session_state.get("theme", "dark") == "dark"
 
+    # Theme Tokens
     T = {
         "page_bg":        "#050914" if is_dark else "#F8FAFC",
         "card_bg":        "rgba(13,23,41,0.85)" if is_dark else "#FFFFFF",
@@ -56,37 +57,41 @@ def render_dashboard_view() -> None:
         "text_muted":     "#94A3B8" if is_dark else "#64748B",
         "text_label":     "#64748B",
 
-        "kpi1_bg":     "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(6,182,212,0.18))"  if is_dark else "linear-gradient(135deg,#FFFFFF,#DBEAFE)",
-        "kpi1_border": "rgba(6,182,212,0.45)"  if is_dark else "#93C5FD",
-        "kpi1_glow":   "0 0 30px rgba(6,182,212,0.22)"  if is_dark else "0 0 16px rgba(59,130,246,0.10)",
-        "kpi1_icon_bg":"linear-gradient(135deg,rgba(6,182,212,0.25),rgba(59,130,246,0.2))" if is_dark else "linear-gradient(135deg,rgba(59,130,246,0.12),rgba(6,182,212,0.10))",
+        # KPI 1: Total Scans
+        "kpi1_bg":      "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(6,182,212,0.18))"  if is_dark else "linear-gradient(135deg,#FFFFFF,#DBEAFE)",
+        "kpi1_border":  "rgba(6,182,212,0.45)"  if is_dark else "#93C5FD",
+        "kpi1_glow":    "0 0 30px rgba(6,182,212,0.22)"  if is_dark else "0 0 16px rgba(59,130,246,0.10)",
+        "kpi1_icon_bg": "linear-gradient(135deg,rgba(6,182,212,0.25),rgba(59,130,246,0.2))" if is_dark else "linear-gradient(135deg,rgba(59,130,246,0.12),rgba(6,182,212,0.10))",
         "kpi1_sparkline":"#06B6D4" if is_dark else "#2563EB",
-        "kpi1_text":   "#22D3EE" if is_dark else "#1D4ED8",
-        "kpi1_accent": "#06B6D4",
+        "kpi1_text":    "#22D3EE" if is_dark else "#1D4ED8",
+        "kpi1_accent":  "#06B6D4",
 
-        "kpi2_bg":     "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(239,68,68,0.18))"  if is_dark else "linear-gradient(135deg,#FFFFFF,#FEE2E2)",
-        "kpi2_border": "rgba(239,68,68,0.45)"  if is_dark else "#FCA5A5",
-        "kpi2_glow":   "0 0 30px rgba(239,68,68,0.18)"  if is_dark else "0 0 16px rgba(239,68,68,0.10)",
-        "kpi2_icon_bg":"linear-gradient(135deg,rgba(239,68,68,0.25),rgba(236,72,153,0.2))" if is_dark else "linear-gradient(135deg,rgba(239,68,68,0.12),rgba(236,72,153,0.10))",
+        # KPI 2: Threats Blocked
+        "kpi2_bg":      "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(239,68,68,0.18))"  if is_dark else "linear-gradient(135deg,#FFFFFF,#FEE2E2)",
+        "kpi2_border":  "rgba(239,68,68,0.45)"  if is_dark else "#FCA5A5",
+        "kpi2_glow":    "0 0 30px rgba(239,68,68,0.18)"  if is_dark else "0 0 16px rgba(239,68,68,0.10)",
+        "kpi2_icon_bg": "linear-gradient(135deg,rgba(239,68,68,0.25),rgba(236,72,153,0.2))" if is_dark else "linear-gradient(135deg,rgba(239,68,68,0.12),rgba(236,72,153,0.10))",
         "kpi2_sparkline":"#F87171" if is_dark else "#DC2626",
-        "kpi2_text":   "#FB7185" if is_dark else "#B91C1C",
-        "kpi2_accent": "#EF4444",
+        "kpi2_text":    "#FB7185" if is_dark else "#B91C1C",
+        "kpi2_accent":  "#EF4444",
 
-        "kpi3_bg":     "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(245,158,11,0.18))" if is_dark else "linear-gradient(135deg,#FFFFFF,#FEF3C7)",
-        "kpi3_border": "rgba(245,158,11,0.45)" if is_dark else "#FCD34D",
-        "kpi3_glow":   "0 0 30px rgba(245,158,11,0.18)" if is_dark else "0 0 16px rgba(245,158,11,0.10)",
-        "kpi3_icon_bg":"linear-gradient(135deg,rgba(245,158,11,0.25),rgba(249,115,22,0.2))" if is_dark else "linear-gradient(135deg,rgba(245,158,11,0.12),rgba(249,115,22,0.10))",
+        # KPI 3: Privacy Alerts
+        "kpi3_bg":      "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(245,158,11,0.18))" if is_dark else "linear-gradient(135deg,#FFFFFF,#FEF3C7)",
+        "kpi3_border":  "rgba(245,158,11,0.45)" if is_dark else "#FCD34D",
+        "kpi3_glow":    "0 0 30px rgba(245,158,11,0.18)" if is_dark else "0 0 16px rgba(245,158,11,0.10)",
+        "kpi3_icon_bg": "linear-gradient(135deg,rgba(245,158,11,0.25),rgba(249,115,22,0.2))" if is_dark else "linear-gradient(135deg,rgba(245,158,11,0.12),rgba(249,115,22,0.10))",
         "kpi3_sparkline":"#FBBF24" if is_dark else "#D97706",
-        "kpi3_text":   "#FCD34D" if is_dark else "#B45309",
-        "kpi3_accent": "#F59E0B",
+        "kpi3_text":    "#FCD34D" if is_dark else "#B45309",
+        "kpi3_accent":  "#F59E0B",
 
-        "kpi4_bg":     "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(16,185,129,0.18))" if is_dark else "linear-gradient(135deg,#FFFFFF,#D1FAE5)",
-        "kpi4_border": "rgba(16,185,129,0.45)" if is_dark else "#6EE7B7",
-        "kpi4_glow":   "0 0 30px rgba(16,185,129,0.18)" if is_dark else "0 0 16px rgba(16,185,129,0.10)",
-        "kpi4_icon_bg":"linear-gradient(135deg,rgba(16,185,129,0.25),rgba(6,182,212,0.2))" if is_dark else "linear-gradient(135deg,rgba(16,185,129,0.12),rgba(6,182,212,0.10))",
+        # KPI 4: Safe Interactions
+        "kpi4_bg":      "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(16,185,129,0.18))" if is_dark else "linear-gradient(135deg,#FFFFFF,#D1FAE5)",
+        "kpi4_border":  "rgba(16,185,129,0.45)" if is_dark else "#6EE7B7",
+        "kpi4_glow":    "0 0 30px rgba(16,185,129,0.18)" if is_dark else "0 0 16px rgba(16,185,129,0.10)",
+        "kpi4_icon_bg": "linear-gradient(135deg,rgba(16,185,129,0.25),rgba(6,182,212,0.2))" if is_dark else "linear-gradient(135deg,rgba(16,185,129,0.12),rgba(6,182,212,0.10))",
         "kpi4_sparkline":"#34D399" if is_dark else "#059669",
-        "kpi4_text":   "#6EE7B7" if is_dark else "#047857",
-        "kpi4_accent": "#10B981",
+        "kpi4_text":    "#6EE7B7" if is_dark else "#047857",
+        "kpi4_accent":  "#10B981",
 
         "insight_bg":     "linear-gradient(135deg,rgba(13,23,41,0.9),rgba(30,27,75,0.55))" if is_dark else "linear-gradient(135deg,#FFFFFF,#F5F3FF)",
         "insight_border": "rgba(139,92,246,0.45)" if is_dark else "#C4B5FD",
@@ -96,7 +101,7 @@ def render_dashboard_view() -> None:
         "footer_border":  "rgba(59,130,246,0.25)" if is_dark else "#E2E8F0",
     }
 
-    # ── 2. METRICS ───────────────────────────────────────────────────────────
+    # ── 2. METRICS AGGREGATION ────────────────────────────────────────────────
     logs: List[Dict[str, Any]] = get_all_logs() or []
     summary: Dict[str, Any] = get_audit_summary_metrics()
     real_total   = len(logs)
@@ -109,60 +114,64 @@ def render_dashboard_view() -> None:
     privacy_alerts   = 523  + real_sanitized
     safe_interactions = 3645 + real_allowed
 
-    # ── 3. HEADER ────────────────────────────────────────────────────────────
+    # ── 3. HEADER ROW ─────────────────────────────────────────────────────────
     logo_b64 = _get_logo_b64()
-    logo_tag = f'<img src="{logo_b64}" style="width:38px;height:38px;border-radius:9px;object-fit:contain;box-shadow:0 0 16px rgba(56,189,248,0.4);border:1px solid rgba(56,189,248,0.3);flex-shrink:0;" alt="Logo"/>' if logo_b64 else ""
+    logo_tag = f'<img src="{logo_b64}" style="width:40px;height:40px;border-radius:10px;object-fit:contain;box-shadow:0 0 16px rgba(56,189,248,0.4);border:1px solid rgba(56,189,248,0.3);flex-shrink:0;" alt="Logo"/>' if logo_b64 else ""
 
-    hdr_left, hdr_badges, hdr_t1, hdr_t2 = st.columns([4.0, 4.0, 1.0, 1.0])
-    with hdr_left:
-        _html(f'''
-        <div style="display:flex;align-items:center;gap:12px;">
-            {logo_tag}
-            <div>
-                <h1 style="color:{T['title_color']};font-size:28px;font-weight:900;letter-spacing:-0.6px;margin:0 0 2px 0;line-height:1.1;">Security Dashboard</h1>
-                <div style="color:{T['text_muted']};font-size:12px;font-weight:600;letter-spacing:0.4px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                    <span>AI Security</span><span style="opacity:0.4;">&#8226;</span><span>Zero-Trust Privacy</span><span style="opacity:0.4;">&#8226;</span><span>Active Intelligence</span>
+    col_head_info, col_head_btns = st.columns([8.2, 1.8])
+
+    with col_head_info:
+        _render(f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+            <div style="display:flex;align-items:center;gap:14px;">
+                {logo_tag}
+                <div>
+                    <h1 style="color:{T['title_color']};font-size:26px;font-weight:900;letter-spacing:-0.5px;margin:0 0 2px 0;line-height:1.1;">Security Dashboard</h1>
+                    <div style="color:{T['text_muted']};font-size:12px;font-weight:600;letter-spacing:0.3px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                        <span>AI Security</span><span style="opacity:0.4;">•</span><span>Zero-Trust Privacy</span><span style="opacity:0.4;">•</span><span>Active Intelligence</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
+                <div style="background:{'rgba(16,185,129,0.12)' if is_dark else 'rgba(16,185,129,0.06)'};border:1px solid rgba(16,185,129,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                    <span style="font-size:7px;color:#10B981;">●</span>
+                    <span style="color:#10B981;font-size:11px;font-weight:800;letter-spacing:0.3px;">SYSTEM SECURE</span>
+                </div>
+                <div style="background:{'rgba(6,182,212,0.12)' if is_dark else 'rgba(6,182,212,0.06)'};border:1px solid rgba(6,182,212,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                    <span style="font-size:7px;color:#06B6D4;">●</span>
+                    <span style="color:#06B6D4;font-size:11px;font-weight:800;letter-spacing:0.3px;">ENGINE ACTIVE</span>
+                </div>
+                <div style="background:{'rgba(139,92,246,0.12)' if is_dark else 'rgba(139,92,246,0.06)'};border:1px solid rgba(139,92,246,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                    <span style="font-size:7px;color:#8B5CF6;">●</span>
+                    <span style="color:#8B5CF6;font-size:11px;font-weight:800;letter-spacing:0.3px;">TRUST 98/100</span>
                 </div>
             </div>
         </div>
-        ''')
-    with hdr_badges:
-        _html(f'''
-        <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;height:100%;padding-top:4px;">
-            <div style="background:{'rgba(16,185,129,0.12)' if is_dark else 'rgba(16,185,129,0.06)'};border:1px solid rgba(16,185,129,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                <span style="font-size:7px;color:#10B981;animation:soc-pulse-green 2s infinite;">&#9679;</span>
-                <span style="color:#10B981;font-size:11px;font-weight:800;letter-spacing:0.3px;">SYSTEM SECURE</span>
-            </div>
-            <div style="background:{'rgba(6,182,212,0.12)' if is_dark else 'rgba(6,182,212,0.06)'};border:1px solid rgba(6,182,212,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                <span style="font-size:7px;color:#06B6D4;animation:soc-pulse-cyan 2s infinite;">&#9679;</span>
-                <span style="color:#06B6D4;font-size:11px;font-weight:800;letter-spacing:0.3px;">ENGINE ACTIVE</span>
-            </div>
-            <div style="background:{'rgba(139,92,246,0.12)' if is_dark else 'rgba(139,92,246,0.06)'};border:1px solid rgba(139,92,246,0.35);border-radius:20px;padding:5px 12px;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                <span style="font-size:7px;color:#8B5CF6;">&#9679;</span>
-                <span style="color:#8B5CF6;font-size:11px;font-weight:800;letter-spacing:0.3px;">TRUST 98/100</span>
-            </div>
-        </div>
-        ''')
-    with hdr_t1:
-        if st.button("Light", key="toggle_theme_light", type="primary" if not is_dark else "secondary", use_container_width=True):
-            if is_dark:
-                st.session_state["theme"] = "light"
-                st.rerun()
-    with hdr_t2:
-        if st.button("Dark", key="toggle_theme_dark", type="primary" if is_dark else "secondary", use_container_width=True):
-            if not is_dark:
-                st.session_state["theme"] = "dark"
-                st.rerun()
+        """)
 
-    _html(f"<div style='height:1px;background:linear-gradient(90deg,transparent,{T['divider']},transparent);margin:12px 0 20px 0;'></div>")
+    with col_head_btns:
+        btn_t1, btn_t2 = st.columns(2)
+        with btn_t1:
+            if st.button("Light", key="toggle_theme_light", type="primary" if not is_dark else "secondary", use_container_width=True):
+                if is_dark:
+                    st.session_state["theme"] = "light"
+                    st.rerun()
+        with btn_t2:
+            if st.button("Dark", key="toggle_theme_dark", type="primary" if is_dark else "secondary", use_container_width=True):
+                if not is_dark:
+                    st.session_state["theme"] = "dark"
+                    st.rerun()
 
-    # ── 4. KPI ROW — Pure CSS Grid (no st.columns) ───────────────────────────
+    _render(f"<div style='height:1px;background:linear-gradient(90deg,transparent,{T['divider']},transparent);margin:12px 0 20px 0;'></div>")
+
+    # ── 4. ROW 1: 4 KPI CARDS ─────────────────────────────────────────────────
     kpi_svg = {
         "scans":   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
         "threats": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
         "alerts":  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
         "safe":    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
     }
+
     kpis = [
         ("TOTAL SCANS",       total_scans,       "+18.7%", "vs last 7 days", kpi_svg["scans"],   "kpi1", "M2 22 L12 18 L22 20 L32 12 L42 15 L52 9 L62 12 L72 4",    True),
         ("THREATS BLOCKED",   threats_blocked,    "+12.4%", "vs last 7 days", kpi_svg["threats"], "kpi2", "M2 16 L12 20 L22 10 L32 17 L42 8 L52 12 L62 6 L72 3",     True),
@@ -182,8 +191,8 @@ def render_dashboard_view() -> None:
         trend_color = text_c if is_up else "#F59E0B"
         uid = label.replace(" ", "")
 
-        kpi_cards_html += f'''
-        <div style="background:{bg};border:1.5px solid {border};border-radius:{T['card_radius']};padding:16px 18px;box-shadow:{T['card_shadow']},{glow};min-height:148px;display:flex;flex-direction:column;justify-content:space-between;{T['backdrop']}position:relative;overflow:hidden;box-sizing:border-box;">
+        kpi_cards_html += f"""
+        <div style="background:{bg};border:1.5px solid {border};border-radius:{T['card_radius']};padding:18px 20px;box-shadow:{T['card_shadow']},{glow};min-height:148px;display:flex;flex-direction:column;justify-content:space-between;{T['backdrop']}position:relative;overflow:hidden;box-sizing:border-box;">
             <div style="position:absolute;top:-25px;right:-25px;width:100px;height:100px;background:radial-gradient(circle,{accent}15,transparent 70%);border-radius:50%;pointer-events:none;"></div>
             <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;">
                 <div>
@@ -204,16 +213,15 @@ def render_dashboard_view() -> None:
                 </svg>
             </div>
         </div>
-        '''
+        """
 
-    _html(f'''
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;width:100%;margin-bottom:18px;">
+    _render(f"""
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;width:100%;margin-bottom:20px;box-sizing:border-box;">
         {kpi_cards_html}
     </div>
-    ''')
+    """)
 
-    # ── 5. ANALYTICS ROW — Pure CSS Grid (no st.columns) ─────────────────────
-    # Detection categories
+    # ── 5. ROW 2: 3 ANALYTICS CARDS ───────────────────────────────────────────
     categories = [
         ("Authentication",       8,  26, "linear-gradient(90deg,#06B6D4,#3B82F6)", "#0EA5E9"),
         ("Financial Data",       9,  29, "linear-gradient(90deg,#F59E0B,#F97316)", "#D97706"),
@@ -224,30 +232,29 @@ def render_dashboard_view() -> None:
     ]
     det_rows = ""
     for name, count, pct, gradient, color in categories:
-        det_rows += f'''
+        det_rows += f"""
         <div style="display:grid;grid-template-columns:145px 1fr 28px;align-items:center;gap:8px;margin-bottom:8px;">
             <div style="color:{T['text_primary']};font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                <span style="color:{color};font-size:8px;">&#9679;</span> {name}
+                <span style="color:{color};font-size:8px;">●</span> {name}
             </div>
             <div style="background:{T['bar_track']};border-radius:6px;height:6px;overflow:hidden;width:100%;">
                 <div style="background:{gradient};width:{pct}%;height:100%;border-radius:6px;box-shadow:0 0 8px {color}33;"></div>
             </div>
             <div style="color:{color};font-weight:800;font-size:12.5px;text-align:right;">{count}</div>
         </div>
-        '''
+        """
 
-    node_glow = "0.95" if is_dark else "0.75"
-    line_op   = "0.65" if is_dark else "0.45"
+    line_op = "0.65" if is_dark else "0.45"
 
-    # Security Posture card
-    card_posture = f'''
-    <div style="background:{T['card_bg']};border:1.5px solid {T['card_border']};border-radius:{T['card_radius']};padding:20px;box-shadow:{T['card_shadow']};{T['backdrop']}box-sizing:border-box;min-height:330px;display:flex;flex-direction:column;justify-content:space-between;">
+    # Card 1: Security Posture
+    card_posture = f"""
+    <div style="background:{T['card_bg']};border:1.5px solid {T['card_border']};border-radius:{T['card_radius']};padding:22px;box-shadow:{T['card_shadow']};{T['backdrop']}box-sizing:border-box;min-height:330px;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <h3 style="color:{T['title_color']};font-size:16px;font-weight:800;margin:0;white-space:nowrap;">Security Posture</h3>
                 <span style="background:rgba(16,185,129,0.15);color:#10B981;border:1px solid rgba(16,185,129,0.35);font-size:9.5px;font-weight:800;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.6px;white-space:nowrap;">EXCELLENT</span>
             </div>
-            <div style="display:flex;justify-content:center;align-items:center;padding:2px 0 6px 0;">
+            <div style="display:flex;justify-content:center;align-items:center;padding:4px 0 8px 0;">
                 <div style="position:relative;width:140px;height:140px;">
                     <svg width="140" height="140" viewBox="0 0 160 160">
                         <circle cx="80" cy="80" r="64" stroke="{T['ring_track']}" stroke-width="12" fill="none"/>
@@ -264,28 +271,26 @@ def render_dashboard_view() -> None:
         <div>
             <div style="font-size:9.5px;font-weight:800;color:{T['text_muted']};text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;padding-top:8px;border-top:1px solid {T['divider']};">Status Breakdown</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(16,185,129,0.08)' if is_dark else 'rgba(16,185,129,0.04)'};border-radius:8px;border:1px solid {'rgba(16,185,129,0.2)' if is_dark else 'rgba(16,185,129,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#10B981;font-size:8px;">&#9679;</span> Safe</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">3,645</strong></div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(245,158,11,0.08)' if is_dark else 'rgba(245,158,11,0.04)'};border-radius:8px;border:1px solid {'rgba(245,158,11,0.2)' if is_dark else 'rgba(245,158,11,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#F59E0B;font-size:8px;">&#9679;</span> Warning</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">312</strong></div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(239,68,68,0.08)' if is_dark else 'rgba(239,68,68,0.04)'};border-radius:8px;border:1px solid {'rgba(239,68,68,0.2)' if is_dark else 'rgba(239,68,68,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#EF4444;font-size:8px;">&#9679;</span> Blocked</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">128</strong></div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(59,130,246,0.08)' if is_dark else 'rgba(59,130,246,0.04)'};border-radius:8px;border:1px solid {'rgba(59,130,246,0.2)' if is_dark else 'rgba(59,130,246,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#3B82F6;font-size:8px;">&#9679;</span> Monitor</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">807</strong></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(16,185,129,0.08)' if is_dark else 'rgba(16,185,129,0.04)'};border-radius:8px;border:1px solid {'rgba(16,185,129,0.2)' if is_dark else 'rgba(16,185,129,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#10B981;font-size:8px;">●</span> Safe</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">3,645</strong></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(245,158,11,0.08)' if is_dark else 'rgba(245,158,11,0.04)'};border-radius:8px;border:1px solid {'rgba(245,158,11,0.2)' if is_dark else 'rgba(245,158,11,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#F59E0B;font-size:8px;">●</span> Warning</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">312</strong></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(239,68,68,0.08)' if is_dark else 'rgba(239,68,68,0.04)'};border-radius:8px;border:1px solid {'rgba(239,68,68,0.2)' if is_dark else 'rgba(239,68,68,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#EF4444;font-size:8px;">●</span> Blocked</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">128</strong></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:{'rgba(59,130,246,0.08)' if is_dark else 'rgba(59,130,246,0.04)'};border-radius:8px;border:1px solid {'rgba(59,130,246,0.2)' if is_dark else 'rgba(59,130,246,0.12)'};"><span style="color:{T['text_primary']};font-weight:600;font-size:11.5px;"><span style="color:#3B82F6;font-size:8px;">●</span> Monitor</span><strong style="color:{T['title_color']};font-weight:800;font-size:12px;">807</strong></div>
             </div>
         </div>
     </div>
-    '''
+    """
 
-    # AI Security Intelligence card
-    card_intel = f'''
-    <div style="background:{T['insight_bg']};border:1.5px solid {T['insight_border']};border-radius:{T['card_radius']};padding:20px;box-shadow:{T['card_shadow']};{T['backdrop']}min-height:330px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;">
+    # Card 2: AI Security Intelligence (FLUID FULL TEXT)
+    card_intel = f"""
+    <div style="background:{T['insight_bg']};border:1.5px solid {T['insight_border']};border-radius:{T['card_radius']};padding:22px;box-shadow:{T['card_shadow']};{T['backdrop']}min-height:330px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;">
         <div>
             <h3 style="color:{T['title_color']};font-size:16px;font-weight:800;margin:0 0 12px 0;white-space:nowrap;">AI Security Intelligence</h3>
-            <div style="display:grid;grid-template-columns:1.4fr 0.8fr;gap:16px;align-items:center;">
-                <div>
-                    <p style="color:{T['text_secondary']};font-size:13.2px;line-height:1.65;margin:0;font-weight:500;">
-                        "Identity and credential privacy vectors represent the primary high-severity detections across prompt workflows. Sanitization filters neutralized all PII tokens before LLM dispatch."
-                    </p>
+            <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:center;">
+                <div style="font-size:13.5px;line-height:1.65;color:{T['text_secondary']};font-weight:500;word-break:normal;white-space:normal;">
+                    "Identity and credential privacy vectors represent the primary high-severity detections across prompt workflows. Sanitization filters neutralized all PII tokens before LLM dispatch."
                 </div>
-                <div style="flex-shrink:0;display:flex;justify-content:center;">
-                    <svg width="125" height="125" viewBox="0 0 140 140" fill="none">
+                <div style="flex-shrink:0;display:flex;justify-content:center;align-items:center;">
+                    <svg width="130" height="130" viewBox="0 0 140 140" fill="none">
                         <circle cx="70" cy="70" r="62" stroke="{'rgba(139,92,246,0.25)' if is_dark else 'rgba(139,92,246,0.15)'}" stroke-width="1" stroke-dasharray="4 6"/>
                         <circle cx="70" cy="70" r="50" stroke="{'rgba(6,182,212,0.3)' if is_dark else 'rgba(6,182,212,0.2)'}" stroke-width="1.2"/>
                         <line x1="70" y1="15" x2="25" y2="55" stroke="#8B5CF6" stroke-width="1.5" opacity="{line_op}"/>
@@ -314,11 +319,11 @@ def render_dashboard_view() -> None:
             </div>
         </div>
     </div>
-    '''
+    """
 
-    # Detections By Category card
-    card_detections = f'''
-    <div style="background:{T['card_bg']};border:1.5px solid {T['card_border']};border-radius:{T['card_radius']};padding:20px;box-shadow:{T['card_shadow']};{T['backdrop']}box-sizing:border-box;min-height:330px;display:flex;flex-direction:column;justify-content:space-between;">
+    # Card 3: Detections By Category
+    card_detections = f"""
+    <div style="background:{T['card_bg']};border:1.5px solid {T['card_border']};border-radius:{T['card_radius']};padding:22px;box-shadow:{T['card_shadow']};{T['backdrop']}box-sizing:border-box;min-height:330px;display:flex;flex-direction:column;justify-content:space-between;">
         <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <h3 style="color:{T['title_color']};font-size:16px;font-weight:800;margin:0;white-space:nowrap;">Detections By Category</h3>
@@ -326,17 +331,17 @@ def render_dashboard_view() -> None:
             {det_rows}
         </div>
     </div>
-    '''
+    """
 
-    _html(f'''
-    <div style="display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:20px;width:100%;margin-bottom:18px;">
+    _render(f"""
+    <div style="display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:20px;width:100%;margin-bottom:20px;box-sizing:border-box;">
         {card_posture}
         {card_intel}
         {card_detections}
     </div>
-    ''')
+    """)
 
-    # ── 6. SYSTEM HEALTH + MODULE LAUNCHPAD — Pure CSS Grid ──────────────────
+    # ── 6. ROW 3: SYSTEM INFRASTRUCTURE + MODULE LAUNCHPAD ────────────────────
     engines = [
         ("Privacy Detection", "ONLINE", "#10B981"),
         ("DistilBERT Engine", "READY",  "#06B6D4"),
@@ -348,15 +353,15 @@ def render_dashboard_view() -> None:
     engine_cards = ""
     for e_name, e_status, e_color in engines:
         r, g, b = int(e_color[1:3],16), int(e_color[3:5],16), int(e_color[5:7],16)
-        engine_cards += f'''
+        engine_cards += f"""
         <div style="background:{T['card_bg_subtle']};border:1px solid rgba({r},{g},{b},0.3);border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;">
             <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;">
-                <span style="font-size:7px;color:{e_color};">&#9679;</span>
+                <span style="font-size:7px;color:{e_color};">●</span>
                 <span style="color:{T['text_primary']};font-size:12px;font-weight:700;">{e_name}</span>
             </div>
             <span style="background:rgba({r},{g},{b},0.12);color:{e_color};border:1px solid {e_color};font-size:9px;font-weight:800;padding:2px 8px;border-radius:8px;letter-spacing:0.4px;white-space:nowrap;">{e_status}</span>
         </div>
-        '''
+        """
 
     qa_items = [
         ("Text Analysis",    "Sanitize prompts &amp; redact sensitive PII", "#3B82F6", "rgba(59,130,246,0.12)", "rgba(59,130,246,0.3)"),
@@ -366,22 +371,22 @@ def render_dashboard_view() -> None:
     ]
     qa_cards = ""
     for qa_title, qa_desc, qa_color, qa_bg, qa_border_clr in qa_items:
-        qa_cards += f'''
+        qa_cards += f"""
         <div style="background:linear-gradient(135deg,{T['card_bg_subtle']},{qa_bg});border:1px solid {qa_border_clr};border-radius:12px;padding:12px 10px 8px 10px;min-height:100px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;">
             <div>
                 <div style="color:{T['title_color']};font-size:12px;font-weight:800;margin-bottom:3px;white-space:nowrap;">{qa_title}</div>
                 <p style="color:{T['text_muted']};font-size:10px;line-height:1.35;margin:0;word-break:normal;">{qa_desc}</p>
             </div>
         </div>
-        '''
+        """
 
-    _html(f'''
-    <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;width:100%;align-items:stretch;">
+    _render(f"""
+    <div style="display:grid;grid-template-columns:1fr 1.35fr;gap:20px;width:100%;align-items:stretch;box-sizing:border-box;">
         <div style="background:{T['card_bg']};border:1.5px solid {T['card_border']};border-radius:{T['card_radius']};padding:20px;box-shadow:{T['card_shadow']};{T['backdrop']}box-sizing:border-box;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <h3 style="color:{T['title_color']};font-size:16px;font-weight:800;margin:0;white-space:nowrap;">System Infrastructure</h3>
                 <span style="color:#10B981;font-size:10px;font-weight:800;display:flex;align-items:center;gap:5px;white-space:nowrap;">
-                    <span style="font-size:7px;animation:soc-pulse-green 2s infinite;">&#9679;</span> ALL ENGINES OPERATIONAL
+                    <span style="font-size:7px;">●</span> ALL ENGINES OPERATIONAL
                 </span>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">{engine_cards}</div>
@@ -398,9 +403,9 @@ def render_dashboard_view() -> None:
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;">{qa_cards}</div>
         </div>
     </div>
-    ''')
+    """)
 
-    # Quick-action buttons (only these need st.columns for interactivity)
+    # Quick-action buttons underneath Module Launchpad
     _, btn_col = st.columns([1.0, 1.35])
     with btn_col:
         b1, b2, b3, b4 = st.columns(4)
@@ -421,13 +426,13 @@ def render_dashboard_view() -> None:
                 st.session_state["selected_page"] = "YouTube Analyzer"
                 st.rerun()
 
-    _html("<div style='margin-bottom:18px;'></div>")
+    _render("<div style='margin-bottom:20px;'></div>")
 
     # ── 7. FOOTER STATUS BAR ─────────────────────────────────────────────────
-    _html(f'''
-    <div style="background:{T['footer_bg']};border:1.5px solid {T['footer_border']};border-radius:14px;padding:12px 20px;box-shadow:{T['card_shadow']};{T['backdrop']}display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    _render(f"""
+    <div style="background:{T['footer_bg']};border:1.5px solid {T['footer_border']};border-radius:14px;padding:12px 20px;box-shadow:{T['card_shadow']};{T['backdrop']}display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;box-sizing:border-box;">
         <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
-            <span style="color:#10B981;font-size:8px;animation:soc-pulse-green 2s infinite;">&#9679;</span>
+            <span style="color:#10B981;font-size:8px;">●</span>
             <span style="color:{T['text_label']};font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;">Active Session</span>
             <span style="color:{T['title_color']};font-size:11.5px;font-weight:800;font-family:'JetBrains Mono',monospace;background:{'rgba(59,130,246,0.12)' if is_dark else 'rgba(59,130,246,0.06)'};padding:2px 8px;border-radius:6px;border:1px solid {'rgba(59,130,246,0.25)' if is_dark else 'rgba(59,130,246,0.12)'};">AS-20AUG-2026-1439</span>
         </div>
@@ -449,7 +454,7 @@ def render_dashboard_view() -> None:
         <div style="width:1px;height:20px;background:{T['divider']};"></div>
         <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
             <span style="color:{T['text_label']};font-size:9.5px;font-weight:800;text-transform:uppercase;">Compliance</span>
-            <span style="color:#D97706;font-size:11.5px;font-weight:800;">GDPR &#8226; ISO 27001</span>
+            <span style="color:#D97706;font-size:11.5px;font-weight:800;">GDPR • ISO 27001</span>
         </div>
     </div>
-    ''')
+    """)

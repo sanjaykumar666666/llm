@@ -85,12 +85,17 @@ section[data-testid="stSidebar"] {
 /* Main content occupies the full remaining viewport */
 section[data-testid="stMain"],
 section.main,
-.main {
+.main,
+[data-testid="stMainBlockContainer"],
+.block-container,
+[data-testid="block-container"],
+div[data-testid="stVerticalBlock"],
+div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stAppViewContainer"] section.main {
     flex: 1 1 auto !important;
     min-width: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    overflow-x: hidden !important;
     box-sizing: border-box !important;
 }
 
@@ -102,7 +107,7 @@ section.main,
     width: 100% !important;
     min-width: 0 !important;
     margin: 0 !important;
-    padding: 1.2rem 2.2rem 3rem 2.2rem !important;
+    padding: 1.2rem 2.5rem 3rem 2.5rem !important;
     box-sizing: border-box !important;
     opacity: 1 !important;
     filter: none !important;
@@ -117,26 +122,6 @@ section.main,
     filter: none !important;
     backdrop-filter: none !important;
     transition: none !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   PURE CSS DASHBOARD GRIDS (No Streamlit Flex Shrink Issues)
-   ═══════════════════════════════════════════════════════════════════ */
-
-.kpi-grid {
-    display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 18px !important;
-    width: 100% !important;
-    align-items: stretch !important;
-}
-
-.analytics-grid {
-    display: grid !important;
-    grid-template-columns: minmax(280px, 0.95fr) minmax(380px, 1.35fr) minmax(280px, 0.95fr) !important;
-    gap: 20px !important;
-    width: 100% !important;
-    align-items: stretch !important;
 }
 
 .ai-security-insight {
