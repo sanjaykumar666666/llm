@@ -482,7 +482,7 @@ def render_chatbot_view():
                 st.markdown(display_text)
                 if msg.get("tool_used") and msg["tool_used"] != "💬 Standard Chat":
                     st.caption(f"🔧 *Invoked Tool:* `{msg['tool_used']}`")
-                if msg.get("has_redactions") or msg.get("was_blocked") or msg.get("credential_masked_text"):
+                if msg.get("has_redactions") or msg.get("was_blocked"):
                     st.caption("🔒 *Sensitive data detected — redacted before processing & display*")
 
         else:
@@ -631,7 +631,7 @@ def render_chatbot_view():
                 "id": f"{msg_turn_id}-user",
                 "role": "user",
                 "text": _safe_redacted_prompt,
-                "credential_masked_text": _safe_redacted_prompt,
+                "credential_masked_text": _safe_redacted_prompt if _has_redactions else None,
                 "has_redactions": _has_redactions,
                 "was_blocked": True,
                 "tool_used": active_tool_name,
@@ -665,7 +665,7 @@ def render_chatbot_view():
                 "id": f"{msg_turn_id}-user",
                 "role": "user",
                 "text": _safe_redacted_prompt,
-                "credential_masked_text": _safe_redacted_prompt,
+                "credential_masked_text": _safe_redacted_prompt if _has_redactions else None,
                 "has_redactions": _has_redactions,
                 "was_blocked": False,
                 "tool_used": active_tool_name,
