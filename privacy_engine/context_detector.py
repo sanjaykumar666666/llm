@@ -245,6 +245,12 @@ _CREDENTIAL_DISCLOSURE_PATTERNS: List[Tuple[str, str, str, str]] = [
 _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     # (Entity Type, Pattern, Severity, Description)
     (
+        "EMAIL_ADDRESS",
+        r'\b[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b',
+        "MEDIUM",
+        "Personal contact email address"
+    ),
+    (
         "PHONE_NUMBER",
         r'(?i)(?:\b(?:my|the|our|contact)?\s*(?:phone|mobile|cell|tel|telephone|whatsapp)\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?((?:\+?91[-\s]?)?[6-9]\d{4}[-\s]?\d{5}|\+?1[\s.-]?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}|\d{10})["\']?)',
         "MEDIUM",
@@ -306,7 +312,7 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "GOVERNMENT_ID_AADHAAR",
-        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{12})["\']?)',
+        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?(?:\d{4}|\d{2,4})|\d{10,12})["\']?)',
         "HIGH",
         "Indian National Aadhaar Number with contextual phrase"
     ),
@@ -588,8 +594,9 @@ class ContextAwareEntityDetector:
                     elif entity_type == "PASSPORT_NUMBER" and len(val) < 7:
                         continue
                     elif entity_type == "GOVERNMENT_ID_AADHAAR":
-                        digits = re.sub(r'\D', '', val)
-                        if len(digits) != 12:
+                        target_val = match.group(1) if (match.lastindex and match.lastindex >= 1 and match.group(1)) else val
+                        digits = re.sub(r'\D', '', target_val)
+                        if not (10 <= len(digits) <= 12):
                             continue
 
                     category_map = {

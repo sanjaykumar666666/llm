@@ -215,12 +215,18 @@ def main():
     elif page in ("image privacy", "image analysis", "image"):
         from frontend.views.image_analyzer import render_image_analyzer_view
         render_image_analyzer_view()
+    elif page in ("ai privacy twin", "privacy twin", "twin", "synthetic twin"):
+        from frontend.views.privacy_twin_view import render_privacy_twin_view
+        render_privacy_twin_view()
     elif page in ("video privacy", "video analysis", "video"):
         from frontend.views.video_analyzer import render_video_analyzer_view
         render_video_analyzer_view()
     elif page in ("youtube analyzer", "youtube", "youtube privacy"):
         from frontend.views.youtube_analyzer import render_youtube_analyzer_view
         render_youtube_analyzer_view()
+    elif page in ("social post creator", "social post", "social", "instasafe", "instagram"):
+        from frontend.views.social_creator_platform import render_social_creator_platform_view
+        render_social_creator_platform_view()
     elif page in ("canvas", "canvas editor", "canvas workspace", "ai summarizer", "summarizer"):
         st.session_state["active_tool"] = "✍️ Canvas"
         from frontend.views.text_summarizer import render_text_summarizer_view

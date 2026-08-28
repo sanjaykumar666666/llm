@@ -423,8 +423,34 @@ def chat_endpoint(req: ChatRequest):
     search_ms = 0.0
     llm_ms = 0.0
 
-    # Execute Live Web Retrieval for all user questions
-    if not rag_context and req.mcp_enabled and routing_intent["should_search"]:
+    # Execute MCP System / Diagnostic Tool if targeted query
+    if not rag_context and req.mcp_enabled:
+        lower_p = raw_prompt.lower()
+        if any(k in lower_p for k in ["system health", "health status", "system metrics", "operational status"]):
+            mcp_mgr = _get_mcp_manager()
+            t_exec = mcp_mgr.execute_tool_guarded("get_system_health", {"include_memory": True})
+            if t_exec.get("success"):
+                health_data = t_exec.get("result", {})
+                mcp_meta = {
+                    "tool_name": "get_system_health",
+                    "status": "SUCCESS",
+                    "result": health_data,
+                    "sources_count": 0,
+                    "sources": [],
+                    "security_status": "trusted_system_data",
+                    "trusted_as_instruction": False,
+                }
+                response_text = (
+                    f"🖥️ **System Health & Metrics Status**:\n"
+                    f"- **Operational Status**: {health_data.get('status', 'HEALTHY')}\n"
+                    f"- **CPU Usage**: {health_data.get('cpu_usage_pct', 'N/A')}%\n"
+                    f"- **Memory Usage**: {health_data.get('memory_usage_pct', 'N/A')}%\n"
+                    f"- **Platform**: {health_data.get('platform', 'N/A')}\n"
+                    f"- **Active Models**: {', '.join(health_data.get('active_models', []))}"
+                )
+
+    # Execute Live Web Retrieval for all other user questions
+    if not rag_context and req.mcp_enabled and routing_intent["should_search"] and not response_text:
         t_search_start = time.perf_counter()
         from mcp_engine.tool_security_gateway import secure_tool_call
         tool_res = secure_tool_call(

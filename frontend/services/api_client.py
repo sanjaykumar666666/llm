@@ -232,13 +232,13 @@ class APIClient:
         yield ("meta", resp)
 
     @classmethod
-    def analyze_youtube(cls, url: str, custom_transcript: Optional[str] = None) -> Dict[str, Any]:
-        """Module: YouTube Privacy Analyzer API endpoint with real 7-phase pipeline."""
+    def analyze_social_media(cls, url: str, custom_transcript: Optional[str] = None) -> Dict[str, Any]:
+        """Universal Social Media Content Analyzer for YouTube, Instagram, Facebook, X, TikTok, Vimeo, Reddit, and Web Media."""
         if cls._is_backend_online():
             try:
                 res = requests.post(
-                    f"{BACKEND_API_URL}/analyze/youtube",
-                    json={"youtube_url": url, "custom_transcript": custom_transcript},
+                    f"{BACKEND_API_URL}/analyze/social",
+                    json={"url": url, "custom_transcript": custom_transcript},
                     timeout=15.0
                 )
                 if res.status_code == 200:
@@ -246,17 +246,28 @@ class APIClient:
             except Exception:
                 pass
 
-        # Direct in-process execution via real multimodal pipeline
+        # Direct in-process execution via universal content service
         try:
-            from backend.routes.youtube_analysis import run_youtube_pipeline
-            return run_youtube_pipeline(url, custom_transcript=custom_transcript)
+            from backend.routes.youtube_analysis import run_social_media_pipeline
+            return run_social_media_pipeline(url, custom_transcript=custom_transcript)
         except Exception as e:
             return {
                 "status": "error",
                 "error_type": "PROCESSING_FAILURE",
-                "error_message": f"Processing pipeline encountered an issue: {str(e)}",
+                "error_message": f"Social media analysis pipeline encountered an issue: {str(e)}",
                 "is_mock": False,
             }
+
+    @classmethod
+    def identify_platform(cls, url: str) -> Dict[str, Any]:
+        """Identifies platform and content type for a given URL."""
+        from backend.adapters.platform_adapters import SocialMediaAdapterRegistry
+        return SocialMediaAdapterRegistry.identify_platform_info(url)
+
+    @classmethod
+    def analyze_youtube(cls, url: str, custom_transcript: Optional[str] = None) -> Dict[str, Any]:
+        """Module: YouTube Privacy Analyzer API endpoint (backward compatible)."""
+        return cls.analyze_social_media(url=url, custom_transcript=custom_transcript)
 
     @classmethod
     def analyze_image(cls, file_name: str, file_bytes: bytes, protection_mode: str = "BLUR_ALL") -> Dict[str, Any]:

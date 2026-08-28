@@ -10,6 +10,8 @@ from pipeline.risk_engine import PrivacyRiskScoringEngine
 from pipeline.protection_engine import ProtectionAndDecisionEngine
 from processing.text_processor import TextProcessor
 from backend.services.shap_explainer import SHAPExplainer
+from backend.services.youtube_risk_service import YouTubeRiskService
+from backend.services.universal_content_service import UniversalContentService
 
 router = APIRouter()
 
@@ -317,13 +319,45 @@ def run_youtube_pipeline(url_or_id: str, custom_transcript: Optional[str] = None
     hybrid_conf = hybrid_res.confidence if hasattr(hybrid_res, "confidence") else 0.89
     confidence_pct = int(round(hybrid_conf * 100)) if hybrid_conf > 0 else 89
 
-    # 9. Recommendation
-    if risk_level in ["CRITICAL", "HIGH"]:
-        decision_state = "BLOCK" if detections.has_injection or detections.has_critical_secrets else "SANITIZE"
+    # 9. Comprehensive YouTube Risk, Copyright & Frame Safety Assessment
+    copyright_assessment = YouTubeRiskService.assess_copyright_and_licensing_risk(
+        metadata=metadata,
+        transcript_text=transcript_text,
+    )
+
+    video_summary = YouTubeRiskService.generate_original_summary(
+        title=metadata.get("title", f"YouTube Video ({std_input.youtube_video_id})"),
+        channel=metadata.get("channel", "YouTube Creator"),
+        transcript_text=transcript_text,
+        metadata=metadata,
+        detections=all_detected_items,
+    )
+
+    analyzed_frames = YouTubeRiskService.sample_and_analyze_frames(
+        video_id=std_input.youtube_video_id or "video",
+        duration_sec=metadata.get("duration_sec", 180.0),
+        title=metadata.get("title", ""),
+        channel=metadata.get("channel", ""),
+        copyright_assessment=copyright_assessment,
+        transcript_segments=analyzed_segments,
+        max_samples=8,
+    )
+
+    final_report = YouTubeRiskService.compile_comprehensive_report(
+        metadata=metadata,
+        summary=video_summary,
+        copyright_assessment=copyright_assessment,
+        analyzed_frames=analyzed_frames,
+        transcript_detections=all_detected_items,
+    )
+
+    # 10. Security Decision Recommendation
+    if risk_level in ["CRITICAL", "HIGH"] or final_report.get("overall_decision") == "BLOCK":
+        decision_state = "BLOCK" if (detections.has_injection or detections.has_critical_secrets or copyright_assessment.get("copyright_risk_level") == "HIGH") else "SANITIZE"
         recommended_action = "BLOCK" if decision_state == "BLOCK" else "SANITIZE & PROTECT"
-    elif risk_level == "MEDIUM":
-        decision_state = "SANITIZE"
-        recommended_action = "SANITIZE"
+    elif risk_level == "MEDIUM" or final_report.get("overall_decision") == "WARN":
+        decision_state = "WARN" if copyright_assessment.get("copyright_risk_level") in ["MEDIUM", "UNKNOWN"] else "SANITIZE"
+        recommended_action = "VERIFY LICENSE & SANITIZE"
     else:
         decision_state = "ALLOW"
         recommended_action = "ALLOW"
@@ -333,6 +367,7 @@ def run_youtube_pipeline(url_or_id: str, custom_transcript: Optional[str] = None
         "modality": "youtube",
         "youtube_url": std_input.youtube_url or url_or_id,
         "youtube_video_id": std_input.youtube_video_id,
+        "standardized_input": std_input.to_summary_dict(),
         "video_metadata": {
             "title": metadata.get("title", f"YouTube Video ({std_input.youtube_video_id})"),
             "channel": metadata.get("channel", "YouTube Creator"),
@@ -343,7 +378,20 @@ def run_youtube_pipeline(url_or_id: str, custom_transcript: Optional[str] = None
             "embed_url": metadata.get("embed_url", f"https://www.youtube.com/embed/{std_input.youtube_video_id}"),
             "canonical_url": metadata.get("canonical_url", f"https://www.youtube.com/watch?v={std_input.youtube_video_id}"),
             "video_id": std_input.youtube_video_id,
+            "license": copyright_assessment.get("license_name", "Standard YouTube License / Unspecified"),
+            "license_status": copyright_assessment.get("license_status", "UNKNOWN"),
+            "is_creative_commons": metadata.get("is_creative_commons", False),
+            "availability": metadata.get("availability", "Public Stream"),
         },
+        # New Video Summary Synthesis
+        "video_summary": video_summary,
+        # New Copyright & Licensing Assessment
+        "copyright_assessment": copyright_assessment,
+        # New Sampled Frame Safety Analysis
+        "analyzed_frames": analyzed_frames,
+        # New Consolidated Final Audit Report
+        "final_report": final_report,
+        "disclaimer": YouTubeRiskService.LEGAL_DISCLAIMER,
         # Risk Overview
         "risk_score": overall_risk,
         "risk_level": risk_level,
@@ -394,4 +442,25 @@ def youtube_analysis_endpoint(req: YouTubeRequest):
     FastAPI endpoint for YouTube Privacy Analysis.
     """
     return run_youtube_pipeline(req.youtube_url, req.custom_transcript)
+
+
+class SocialMediaRequest(BaseModel):
+    url: str
+    custom_transcript: Optional[str] = None
+
+
+def run_social_media_pipeline(url: str, custom_transcript: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Universal Multimodal Social Media Content Analysis Pipeline.
+    Supports YouTube, Instagram, Facebook, X / Twitter, TikTok, Vimeo, Reddit, and Public Media.
+    """
+    return UniversalContentService.analyze_social_content(url=url, custom_text=custom_transcript)
+
+
+@router.post("/analyze/social")
+def social_media_analysis_endpoint(req: SocialMediaRequest):
+    """
+    Universal Social Media Content Analyzer FastAPI Endpoint.
+    """
+    return run_social_media_pipeline(req.url, req.custom_transcript)
 

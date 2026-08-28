@@ -77,7 +77,7 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "GOVERNMENT_ID_AADHAAR",
-        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?\d{4}|\d{12})["\']?)',
+        r'(?i)(?:\b(?:my|the|our|user|citizen|customer)?\s*(?:aadhaar|aadhar|uidai|adhaar|adhar)\s*(?:card)?\s*(?:number|no|num|#)?\s*(?:is|was|=|:)?\s*["\']?(\d{4}[-\s]?\d{4}[-\s]?(?:\d{4}|\d{2,4})|\d{10,12})["\']?)',
         "HIGH",
         "[AADHAAR_REDACTED]",
     ),

@@ -93,6 +93,10 @@ async def image_analysis_endpoint(
         result["risk_assessment"] = risk_assessment.to_dict()
         result["protection_result"] = protection_res.to_dict()
 
+        # Remove raw unencoded bytes before JSON serialization
+        result.pop("protected_image_bytes", None)
+        result.pop("original_image_bytes", None)
+
         return result
 
     finally:

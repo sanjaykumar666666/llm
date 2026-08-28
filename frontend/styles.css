@@ -459,3 +459,109 @@ p, span, div, h1, h2, h3, h4, h5, h6, a {
     word-break: normal !important;
     overflow-wrap: break-word !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PRIVACY BLUR & SENSITIVE DATA SHIELD SYSTEM
+   Shoulder-Surfing Protection with Frosted Glassmorphism & Hover Unblur
+   ═══════════════════════════════════════════════════════════════════ */
+
+.privacy-blur-token {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.14) 0%, rgba(139, 92, 246, 0.12) 100%) !important;
+    border: 1px solid rgba(239, 68, 68, 0.38) !important;
+    border-radius: 6px !important;
+    padding: 2px 8px !important;
+    margin: 1px 2px !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.88em !important;
+    font-weight: 700 !important;
+    color: #FCA5A5 !important;
+    cursor: pointer !important;
+    position: relative !important;
+    vertical-align: middle !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+}
+
+.privacy-blur-token .privacy-blur-icon {
+    font-size: 11px !important;
+    opacity: 0.9 !important;
+    transition: transform 0.2s ease !important;
+}
+
+.privacy-blur-token .privacy-blur-text {
+    filter: blur(4.5px) !important;
+    -webkit-filter: blur(4.5px) !important;
+    transition: filter 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s ease !important;
+    user-select: none !important;
+    letter-spacing: 0.02em !important;
+}
+
+.privacy-blur-token:hover,
+.privacy-blur-token:active,
+.privacy-blur-token:focus {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.18) 0%, rgba(139, 92, 246, 0.20) 100%) !important;
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    color: #38BDF8 !important;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    transform: translateY(-1px) !important;
+}
+
+.privacy-blur-token:hover .privacy-blur-text,
+.privacy-blur-token:active .privacy-blur-text,
+.privacy-blur-token:focus .privacy-blur-text {
+    filter: blur(0px) !important;
+    -webkit-filter: blur(0px) !important;
+    user-select: text !important;
+    color: #F8FAFC !important;
+}
+
+.privacy-blur-token:hover .privacy-blur-icon {
+    transform: scale(1.15) !important;
+}
+
+/* Standalone Privacy Spoiler Blur */
+.privacy-blur {
+    display: inline-block !important;
+    filter: blur(5px) !important;
+    -webkit-filter: blur(5px) !important;
+    background: rgba(239, 68, 68, 0.16) !important;
+    color: #FCA5A5 !important;
+    border-radius: 4px !important;
+    padding: 1px 6px !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    border: 1px dashed rgba(239, 68, 68, 0.45) !important;
+    transition: filter 0.3s ease, background 0.3s ease, color 0.3s ease !important;
+}
+
+.privacy-blur:hover,
+.privacy-blur:active {
+    filter: blur(0px) !important;
+    -webkit-filter: blur(0px) !important;
+    background: rgba(56, 189, 248, 0.2) !important;
+    border-color: rgba(56, 189, 248, 0.6) !important;
+    color: #F8FAFC !important;
+    user-select: text !important;
+}
+
+/* Privacy Shield Active Header Badge */
+.privacy-shield-active-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: rgba(16, 185, 129, 0.12) !important;
+    border: 1px solid rgba(16, 185, 129, 0.35) !important;
+    color: #34D399 !important;
+    border-radius: 20px !important;
+    padding: 4px 10px !important;
+    font-size: 11.5px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.15) !important;
+}
+

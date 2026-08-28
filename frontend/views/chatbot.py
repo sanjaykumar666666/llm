@@ -3,6 +3,8 @@ AI Trust Chat — Secure Chat View with Aiera Multi-Modal Tools Ecosystem.
 File Location: frontend/views/chatbot.py
 """
 
+import re
+import urllib.parse
 import streamlit as st
 import time
 import io
@@ -58,6 +60,35 @@ TOOLS_LIST = [
     "📤 Export Manager",
     "🛡️ AI Trust Core"
 ]
+
+# ── Privacy Blur & Redaction Token Parser ─────────────────────────────────────
+REDACTION_TOKEN_REGEX = re.compile(
+    r'(\[(?:EMAIL|PHONE|AADHAAR|PAN|SSN|NINO|CREDIT_CARD|BANK_ACCOUNT|PASSWORD|API_KEY|AUTH_SECRET|HEALTH_DATA|ADDRESS|PASSPORT|IP|DATABASE_CREDENTIALS|GCP_KEY|AWS_KEY|SENDGRID_KEY|SLACK_TOKEN|GITHUB_TOKEN|JWT|PRIVATE_KEY|IBAN|HEALTH_RECORD|PAYMENT_CARD|BLOCKED_ADVERSARIAL_SEQUENCE|OTP|PIN|AUTH_TOKEN|SECRET_KEY|BANK_CREDENTIAL)_REDACTED\]|\[(?:EMAIL|PHONE|NAME|AADHAAR|PAN|SSN|NINO|PASSPORT|LICENSE|VOTER ID|PAYMENT CARD|BANK ACCOUNT|IBAN|UPI ID|PASSWORD|OTP|PIN|AUTH TOKEN|SECRET KEY|BANK CREDENTIAL|AWS KEY|GITHUB TOKEN|API KEY|GCP KEY|SLACK TOKEN|JWT TOKEN|BEARER TOKEN|PRIVATE KEY|DATABASE CREDENTIALS|HEALTH RECORD|ADDRESS|IP ADDRESS|BLOCKED_ADVERSARIAL_SEQUENCE) REDACTED\]|(?:••••-••••-••••-\d{4}|••••-••••-\d{4}|\*{3}-\*{3}-\d{4}|••••••••\d{4}))',
+    re.IGNORECASE
+)
+
+
+def _render_privacy_blurred_text(text: str) -> str:
+    """
+    Transforms redaction placeholders and masked values into interactive
+    frosted glassmorphism Privacy Blur Badges with smooth hover reveal.
+    """
+    if not text:
+        return text
+
+    def _replace_with_blur_badge(match):
+        token = match.group(0)
+        clean_label = token.replace("[", "").replace("]", "").replace("_REDACTED", "").replace(" REDACTED", "").title()
+        if not clean_label:
+            clean_label = "Redacted"
+        return (
+            f'<span class="privacy-blur-token" title="🔒 {html.escape(clean_label)} Shielded by Privacy Shield (Hover to reveal)">'
+            f'<span class="privacy-blur-icon">🔒</span>'
+            f'<span class="privacy-blur-text">{html.escape(token)}</span>'
+            f'</span>'
+        )
+
+    return REDACTION_TOKEN_REGEX.sub(_replace_with_blur_badge, text)
 
 
 def _init_chat_session():
@@ -369,7 +400,7 @@ def _render_answer_container(
             unsafe_allow_html=True
         )
     else:
-        st.markdown(main_text)
+        st.markdown(_render_privacy_blurred_text(main_text), unsafe_allow_html=True)
 
     # 2. Verified Sources Block
     if sources:
@@ -427,7 +458,13 @@ def render_chatbot_view():
     col_t1, col_t2 = st.columns([3, 1])
     with col_t1:
         st.title("🛡️ AI Trust Chat & Tools Ecosystem")
-        st.caption("Zero-Trust Security Gateway with Universal Live Grounding & Multi-Modal Verification")
+        st.markdown(
+            "<div style='display:flex; align-items:center; gap:10px; margin-top:-6px; margin-bottom:10px;'>"
+            "<span style='color:#94A3B8; font-size:13px;'>Zero-Trust Security Gateway with Universal Live Grounding</span>"
+            "<span class='privacy-shield-active-pill'>🛡️ Privacy Blur Active</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
     with col_t2:
         if st.button("➕ New Chat", use_container_width=True, key="new_chat_btn"):
             new_id = f"thread-{len(threads) + 1}"
@@ -479,11 +516,12 @@ def render_chatbot_view():
                 _render_sanitizer = PrivacySanitizer()
                 # Secondary safety net: sanitize on the fly if raw Aadhaar/PAN/credential is present
                 display_text = _render_sanitizer.sanitize_text(display_text, mode="REDACT").get("sanitized_text", display_text)
-                st.markdown(display_text)
+                blurred_html = _render_privacy_blurred_text(display_text)
+                st.markdown(blurred_html, unsafe_allow_html=True)
                 if msg.get("tool_used") and msg["tool_used"] != "💬 Standard Chat":
                     st.caption(f"🔧 *Invoked Tool:* `{msg['tool_used']}`")
                 if msg.get("has_redactions") or msg.get("was_blocked"):
-                    st.caption("🔒 *Sensitive data detected — redacted before processing & display*")
+                    st.caption("🔒 *Sensitive data detected — blurred & protected by Privacy Shield*")
 
         else:
             with st.chat_message("assistant", avatar="🤖"):

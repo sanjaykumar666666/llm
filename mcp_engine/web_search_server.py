@@ -12,10 +12,12 @@ import re
 import logging
 from typing import Dict, Any, List
 
+from mcp_engine.mcp_server import BaseMCPServer, MCPTool
+
 logger = logging.getLogger("WebSearchMCPServer")
 
 
-class WebSearchMCPServer:
+class WebSearchMCPServer(BaseMCPServer):
     """
     Exposes real web search capabilities via MCP protocols.
     Retrieves live results from DuckDuckGo, Wikipedia API, and Google News RSS feeds.
@@ -23,40 +25,39 @@ class WebSearchMCPServer:
     """
 
     def __init__(self):
-        self.name = "Real-Time Web Search MCP Server"
+        super().__init__(
+            server_id="web_search_mcp",
+            name="Real-Time Web Search MCP Server",
+            description="Exposes real web search capabilities via MCP protocols. Retrieves live results from DuckDuckGo, Wikipedia API, and Google News RSS feeds."
+        )
         self.server_name = self.name
-        self.server_id = "web_search_mcp"
-        self.tools = {tool["name"]: tool for tool in self.get_tool_definitions()}
+        self.register_tool(MCPTool(
+            name="search_web",
+            description="Performs real-time live web search across news, encyclopedia, and web sources.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query term."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of search results to return (default 5)."
+                    }
+                },
+                "required": ["query"]
+            },
+            handler=self._handle_search_web
+        ))
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
-        return [
-            {
-                "name": "search_web",
-                "description": "Performs real-time live web search across news, encyclopedia, and web sources.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query term."
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "description": "Maximum number of search results to return (default 5)."
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        ]
+        return self.list_tools()
 
     def execute_tool(self, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         if tool_name != "search_web":
             return {"error": f"Unknown tool '{tool_name}' on WebSearchMCPServer."}
         return self._handle_search_web(args)
-
-    def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        return self.execute_tool(name, arguments)
 
     def _handle_search_web(self, args: Dict[str, Any]) -> Dict[str, Any]:
         query = args.get("query", "").strip()

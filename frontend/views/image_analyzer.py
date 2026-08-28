@@ -198,20 +198,82 @@ def render_image_analyzer_view() -> None:
                 unsafe_allow_html=True
             )
 
-            # ── Step 4: Privacy-Safe Detection Summary Cards ───────────────────
-            st.markdown("<div style='font-size:13px; font-weight:800; color:#E2E8F0; margin-bottom:8px;'>SENSITIVE REGIONS PROTECTED SUMMARY</div>", unsafe_allow_html=True)
+            # ── Step 4: Granular Privacy Detection Summary Cards ──────────────────
+            st.markdown("<div style='font-size:13px; font-weight:800; color:#E2E8F0; margin-bottom:8px;'>SENSITIVE REGIONS DETECTED & CLASSIFIED</div>", unsafe_allow_html=True)
             
-            c_s1, c_s2, c_s3, c_s4, c_s5 = st.columns(5)
+            c_s1, c_s2, c_s3, c_s4, c_s5, c_s6 = st.columns(6)
             with c_s1:
                 st.metric("Total Regions", det_count)
             with c_s2:
-                st.metric("Identity IDs", cat_counts.get("identity", 0))
+                st.metric("🆔 Govt IDs", cat_counts.get("government_id", 0))
             with c_s3:
-                st.metric("Financial", cat_counts.get("financial", 0))
+                st.metric("📍 Address & PIN", cat_counts.get("address", 0) + cat_counts.get("postal_code", 0))
             with c_s4:
-                st.metric("Auth / Secrets", cat_counts.get("authentication", 0))
+                st.metric("👤 Name & DOB", cat_counts.get("name", 0) + cat_counts.get("date_of_birth", 0))
             with c_s5:
-                st.metric("Personal & Bio", cat_counts.get("personal", 0) + cat_counts.get("biometric", 0))
+                st.metric("📸 Face / Photo", cat_counts.get("biometric_face", 0))
+            with c_s6:
+                st.metric("📱 QR Codes", cat_counts.get("qr_code", 0))
+
+            # ── Step 4.5: Explicit 5-Part Privacy Intelligence Details ─────────
+            detections_list = res.get("detections", [])
+            if detections_list:
+                with st.expander("🔍 DETECTED SENSITIVE ITEMS & REMEDIATION GUIDANCE", expanded=True):
+                    st.markdown(
+                        "<div style='font-size:12px; color:#94A3B8; margin-bottom:10px;'>"
+                        "Every detected item is classified separately with location, severity rationale, potential risks, and action guidance."
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+                    for d in detections_list:
+                        w_what = d.get("what", d.get("description", "Sensitive Artifact"))
+                        w_where = d.get("where", "Detected in frame")
+                        w_why = d.get("why", "Contains private data")
+                        w_prob = d.get("possible_problem", d.get("what_could_happen", "May expose personal identity"))
+                        w_todo = d.get("what_to_do", "Redact before sharing")
+                        prio = d.get("priority", "HIGH")
+                        badge_color = "#EF4444" if prio == "CRITICAL" else ("#F59E0B" if prio == "HIGH" else "#38BDF8")
+                        badge_icon = "🔴" if prio == "CRITICAL" else ("🟠" if prio == "HIGH" else "🔵")
+
+                        st.markdown(
+                            f"""
+                            <div style="background:rgba(15,23,42,0.6); border-left:4px solid {badge_color}; border-radius:8px; padding:10px 14px; margin-bottom:10px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <span style="font-weight:800; font-size:13px; color:#F8FAFC;">{badge_icon} {w_what}</span>
+                                    <span style="background:rgba(255,255,255,0.06); color:#94A3B8; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px;">{w_where}</span>
+                                </div>
+                                <div style="font-size:12px; color:#CBD5E1; margin-bottom:3px;">
+                                    <strong style="color:#94A3B8;">Why?</strong> {w_why}
+                                </div>
+                                <div style="font-size:12px; color:#FCA5A5; margin-bottom:3px;">
+                                    <strong style="color:#F87171;">Possible problem:</strong> {w_prob}
+                                </div>
+                                <div style="font-size:12px; color:#34D399;">
+                                    <strong style="color:#10B981;">What to do:</strong> {w_todo}
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+
+            # ── Step 4.6: Recommended Redactions for Identity Documents ───────
+            recomms = res.get("recommendations", [])
+            if recomms:
+                st.markdown(
+                    """
+                    <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:10px; padding:10px 14px; margin-top:8px; margin-bottom:12px;">
+                        <div style="color:#F59E0B; font-weight:800; font-size:12.5px; margin-bottom:4px;">
+                            🛡️ RECOMMENDED IDENTITY DOCUMENT REDACTIONS:
+                        </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                for rec in recomms:
+                    st.markdown(
+                        f"<div style='font-size:11.5px; color:#CBD5E1; margin-bottom:2px;'>• <strong style='color:#FDE68A;'>{rec['target']}:</strong> {rec['action']} <span style='color:#94A3B8;'>({rec['reason']})</span></div>",
+                        unsafe_allow_html=True
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
 
             # ── Step 5: Side-by-Side Spatial Comparison ────────────────────────
             st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)

@@ -68,6 +68,17 @@ async def video_analysis_endpoint(file: UploadFile = File(...)):
 
         text_analysis = _text_processor.process(extracted_text)
 
+        # Extended Video Content Understanding, Summary & Safety Analysis
+        content_analysis = {}
+        try:
+            from backend.services.video_content_analyzer import VideoContentAnalyzer
+            if std_input.temp_file_path and os.path.exists(std_input.temp_file_path):
+                content_analysis = VideoContentAnalyzer.analyze_video_full(
+                    std_input.temp_file_path, filename=std_input.file_name
+                )
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "file_name": std_input.file_name,
@@ -99,6 +110,12 @@ async def video_analysis_endpoint(file: UploadFile = File(...)):
             "hybrid_classification": hybrid_res.to_dict(),
             "risk_assessment": risk_assessment.to_dict(),
             "protection_result": protection_res.to_dict(),
+            "content_analysis": content_analysis,
+            "video_summary": content_analysis.get("summary", {}),
+            "scenes": content_analysis.get("scenes", []),
+            "copyright_assessment": content_analysis.get("copyright_assessment", {}),
+            "best_frames": content_analysis.get("best_frames", {}),
+            "risk_timeline": content_analysis.get("risk_timeline", []),
             "is_mock": False,
             "engine": "video_pipeline_v7_real",
         }
