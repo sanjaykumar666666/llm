@@ -412,16 +412,19 @@ RE_STATIC_GENERATION = re.compile(
 
 RE_STATIC_CODE = re.compile(
     r"("
-    r"\b(?:write|create|generate|implement|code|build)\s+(?:a\s+|an\s+)?"
+    r"\b(?:write|create|generate|implement|code|build|develop)\s+(?:a\s+|an\s+|me\s+a\s+|me\s+an\s+)?"
+    r"(?:[a-zA-Z0-9_#+-]+\s+){0,4}"
     r"(?:function|class|program|script|algorithm|api|server|database|query|loop|"
     r"method|module|library|framework|component|service|bot|app|website|cli|"
-    r"microservice|rest\s+api|graphql|lambda|cron\s+job)\b"
+    r"microservice|rest\s+api|graphql|lambda|cron\s+job|code)\b"
     r"|"
     r"\bhow\s+to\s+(?:code|write|implement|build|create|make|develop|set\s+up|deploy)\s+"
     r"(?:a\s+|an\s+)?"
     r"|"
     r"\b(?:debug|fix|refactor|optimize|review|explain|analyze)\s+(?:this|the|my)?\s*"
-    r"(?:code|function|script|program|error|bug|issue|snippet|class|method)\b"
+    r"(?:code|function|script|program|error|bug|issue|snippet|class|method|concept|syntax|inheritance|polymorphism|encapsulation|recursion)\b"
+    r"|"
+    r"\bexplain\s+(?:java|python|c\+\+|javascript|typescript|c#|rust|golang|oop|object\s+oriented)\b"
     r"|"
     r"\bwhat\s+does\s+(?:this|the)\s+(?:code|function|class|method|variable|snippet)\s+"
     r"(?:do|mean|return)\b"
@@ -684,6 +687,27 @@ class WebSearchRouter:
             return _make_static_result(
                 resolved_query, "Conversational greeting / acknowledgement — direct response."
             )
+
+        # ── 4b. Code Generation & Deterministic Technical Q&A ───────────────
+        if not RE_EXPLICIT_SEARCH.search(resolved_query):
+            if RE_STATIC_CODE.search(resolved_query) or RE_STATIC_GENERATION.search(resolved_query) or RE_STATIC_MATH.search(resolved_query):
+                return _make_static_result(
+                    resolved_query, "Static code generation / programming / creative task."
+                )
+
+            # ── 4c. Single Entity / General Knowledge Standalone Headwords ───
+            # Short standalone topics (e.g. "Vishnu", "Garuda", "Tea", "Java", "Newton")
+            words = [w for w in re.split(r"\s+", clean_input.strip(" .?,!")) if w]
+            if len(words) <= 2:
+                question_or_temporal_words = {
+                    "who", "what", "where", "when", "why", "how", "is", "are", "was", "were",
+                    "latest", "recent", "today", "current", "now", "news", "price", "weather",
+                    "rate", "score", "versus", "vs", "update", "updates", "search", "google", "find"
+                }
+                if not any(w in question_or_temporal_words for w in words):
+                    return _make_static_result(
+                        resolved_query, f"Static conceptual / general knowledge topic ('{raw_prompt}')."
+                    )
 
         # ── 5. UNIVERSAL LIVE GROUNDED RETRIEVAL (Rule 1 & Rule 2) ───────────
         # EVERY question, entity query, topic, concept, historical query,

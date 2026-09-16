@@ -50,10 +50,18 @@ _HIGH_PERSONAL_RISK_PATTERNS = [
 _MILD_PERSONAL_CONTEXT_PATTERNS = [
     r'\b(?:i have been having|i am having|i had|i am dealing with|i have)\s+(?:problems?|issues?|trouble|struggles?|conflicts?|disagreements?|arguments?)\s+(?:with|in)\s+my\s+(?:relationship|partner|spouse|husband|wife|boyfriend|girlfriend|family|brother|sister|parents|mother|father|friend)\b',
     r'\b(?:my\s+(?:relationship|marriage|partner|spouse|husband|wife|boyfriend|girlfriend|family|brother|sister|parents))\s+(?:and i\s+)?(?:had an argument|are having problems|broke up|is struggling|had a conflict)\b',
+    r'\b(?:my\s+(?:relationship|marriage|partner|spouse|husband|wife|boyfriend|girlfriend|family))\s+(?:has become|is becoming|is|has been|felt)\s+(?:very\s+|so\s+|extremely\s+)?(?:difficult|painful|hard|toxic|strained|troubled|complicated|exhausting)\b',
     r'\b(?:i feel|i am feeling)\s+(?:stressed|upset|anxious|overwhelmed|heartbroken|depressed)\s+(?:about|because of)\s+my\s+(?:relationship|partner|marriage|family|divorce|finances|personal life)\b',
     r'\b(?:i want to talk about|can we talk about|asking for advice on)\s+my\s+(?:personal|relationship|family|marital|dating)\s+(?:situation|problem|struggle|conflict)\b',
     r'\b(?:my personal experience with|in my personal life|my private life)\b',
+    r'\b(?:i|my|me)\s+(?:suffered|was suffering|have been suffering|suffered from|have|had|was diagnosed with|am dealing with|am sick with|contracted|caught)\s+(?:from\s+)?(?:a\s+)?(?:fever|flu|covid|cancer|diabetes|infection|pneumonia|disease|condition|illness|pain|headache|cough|virus|symptoms?)\b',
+    r'\b(?:yesterday|last week|today|recently|for \d+ days)\s+i\s+(?:suffered|had|got|felt|was sick|experienced)\s+.*(?:fever|pain|sick|illness|infection|disease)\b',
+    r'\b(?:my\s+(?:home\s*town|hometown|native\s*(?:place|town|city|village)?|place\s+of\s+origin)|i\s+(?:was\s+born\s+in|grew\s+up\s+in|come\s+from|am\s+from))\s+(?:is|was|=|:)?\s*([a-zA-Z0-9\s.-]{2,40})\b',
+    r'\b(?:i\s+live\s+in|my\s+residence\s+is\s+in|i\s+reside\s+in|currently\s+living\s+in|i\s+stay\s+in|my\s+current\s+location\s+is)\s+([a-zA-Z0-9\s.-]{2,40})\b',
+    r'\b(?:my\s+(?:school|college|university|workplace|employer|company|office|address|home\s+address)\s+is|i\s+(?:study|work)\s+at)\s+([a-zA-Z0-9\s.-]{2,40})\b',
 ]
+
+
 
 
 # ── Actual Direct Credential Disclosure Patterns ──────────────────────────────
@@ -264,9 +272,39 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "MEDICAL_PATIENT_RECORD",
-        r'\bMRN-\d{4,8}\b|\bpatient\s+(?:intake|record|diagnostic|history|report|summary)[:\s]|diagnosed\s+with\s+[a-zA-Z0-9\s]+and\s+prescribed|prescribed\s+(?:daily\s+)?[a-zA-Z0-9\s]+(?:mg|g|mcg|tablets?)|scheduled\s+for\s+[a-zA-Z0-9\s]+(?:surgery|catheterization|procedure)|tested\s+positive\s+for\s+[a-zA-Z0-9\s]+;\s*allergy',
+        r'(?i)\b(?:MRN-\d{4,8}|patient\s+(?:intake|record|diagnostic|history|report|summary)[:\s]|(?:diagnosed\s+(?:with|of)|suffering\s+from|tested\s+positive\s+for|biopsy\s+shows|clinical\s+diagnosis|pathology\s+report)\s+[a-z0-9\s,-]{2,40}?(?:diabetes|cancer|hypertension|covid-?19|asthma|depression|anxiety|hiv|cardiac|tumor|leukemia|arthritis|alzheimer|dementia|bipolar|infection|pneumonia|hepatitis|stroke|disorder|ulcer|epilepsy)|scheduled\s+for\s+[a-zA-Z0-9\s]+(?:surgery|catheterization|procedure))',
+        "HIGH",
+        "Protected Health Information (PHI / Medical Record & Diagnosis)"
+    ),
+    (
+        "PRESCRIPTION_DATA",
+        r'(?i)\b(?:prescribed|prescription|dosage|taking|dose\s+of)\s+(?:daily\s+|twice\s+daily\s+|oral\s+)?[a-zA-Z0-9\s-]{2,30}?\s*(?:\d{1,4}\s*(?:mg|g|mcg|ml|tablets?|capsules?|units?))|\b(?:amoxicillin|metformin|lisinopril|atorvastatin|levothyroxine|amlodipine|metoprolol|omeprazole|losartan|albuterol|gabapentin|hydrochlorothiazide|sertraline|simvastatin|montelukast|escitalopram|pantoprazole|fluoxetine|furosemide|doxycycline|ibuprofen|paracetamol|aspirin|prednisone)\s*(?:\d{1,4}\s*(?:mg|g|mcg|ml))\b',
+        "HIGH",
+        "Prescription Medication and Dosage Data"
+    ),
+    (
+        "CONFIDENTIAL_BUSINESS_INFO",
+        r'(?i)(?:\b(?:confidential\s+project|internal\s+project|project\s+codename|codename)\s*[:=]?\s*[\'"]?([A-Z][a-zA-Z0-9_-]+(?:\s+[A-Z][a-zA-Z0-9_-]+)?)|Project\s+(?:Titan|Apollo|Genesis|Prometheus|Manhattan|Starlight|Blackhawk|Vanguard|Phoenix|Mercury)\s*[-:]?\s*(?:confidential|internal\s+only|strictly\s+confidential|proprietary)|\b(?:(?:q[1-4]|quarterly|annual|fiscal\s+year|fy\d{2,4})\s+(?:revenue|sales|profit|margin|earnings|ebitda)\s*(?:is|was|=|:)\s*[\$€£₹]?\s*\d+(?:\.\d+)?\s*(?:million|billion|m|b|k)?|\b(?:internal|confidential)\s+(?:profit\s+margin|financials?|revenue|budget)\s*(?:is|was|=|:)?\s*[\$€£₹]?\s*\d+(?:\.\d+)?\s*(?:%|million|billion|m|b)?)|confidential\s+(?:company|internal|business|client)\s+(?:data|database|records?|strategy|roadmap|memo|information)|proprietary\s+(?:algorithm|architecture|source\s+code|trade\s+secret)|strictly\s+confidential\s+under\s+nda|confidential\s+client\s+contract\s+value\s*[:=]?\s*[\$€£₹]?\s*\d+)',
+        "HIGH",
+        "Confidential Company Information, Financial Metrics & Trade Secrets"
+    ),
+    (
+        "UPI_ID",
+        r'\b[a-zA-Z0-9.\-_]{2,49}@(okhdfcbank|okaxis|oksbi|okicici|upi|paytm|ybl|apl|axl|ibl|barodampay|federal|kotak|postbank|idfcbank|freecharge|airtel|pingpay)\b',
         "MEDIUM",
-        "Protected Health Information (PHI / Medical Record)"
+        "Unified Payments Interface (UPI) ID / Virtual Payment Address"
+    ),
+    (
+        "DRIVING_LICENSE",
+        r'\b[A-Z]{2}[0-9]{2}[ -]?[0-9]{4}[ -]?[0-9]{7}\b|\bDL[ -]?[A-Z0-9]{8,16}\b',
+        "HIGH",
+        "Driver's License Identification Number"
+    ),
+    (
+        "VOTER_ID",
+        r'\b[A-Z]{3}[0-9]{7}\b',
+        "HIGH",
+        "Electoral Voter Identification Card Number"
     ),
     (
         "PHYSICAL_STREET_ADDRESS",
@@ -275,6 +313,37 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
         "Residential / Physical Delivery Address"
     ),
     (
+        "PHYSICAL_LOCATION_INFO",
+        r'(?i)\b(?:my\s+(?:home\s*town|hometown|native\s*(?:place|town|city|village)?|place\s+of\s+origin)|i\s+(?:was\s+born\s+in|grew\s+up\s+in|come\s+from|am\s+from))\s+(?:is|was|=|:)?\s*["\']?([A-Za-z0-9\s.,-]{2,40})["\']?',
+        "MEDIUM",
+        "Self-Disclosed Hometown, Native Place, or Origin Location"
+    ),
+    (
+        "PHYSICAL_LOCATION_INFO",
+        r'(?i)\b(?:i\s+live\s+in|my\s+residence\s+is\s+in|i\s+reside\s+in|currently\s+living\s+in|i\s+stay\s+in|my\s+current\s+location\s+is)\s+["\']?([A-Za-z0-9\s.,-]{2,50})["\']?',
+        "MEDIUM",
+        "Self-Disclosed Residential City or Current Living Location"
+    ),
+    (
+        "PHYSICAL_STREET_ADDRESS",
+        r'(?i)\b(?:my\s+(?:address|home\s+address|residential\s+address|postal\s+address)\s+is)\s*[:=]?\s*["\']?([A-Za-z0-9\s.,#-]{3,60})["\']?',
+        "MEDIUM",
+        "Self-Disclosed Residential or Postal Street Address"
+    ),
+    (
+        "SCHOOL_INFO",
+        r'(?i)\b(?:my\s+(?:school|college|university|alma\s+mater)\s+is|i\s+(?:study|studied|go\s+to|went\s+to)\s+at)\s+["\']?([A-Za-z0-9\s.,-]{2,50})["\']?',
+        "MEDIUM",
+        "Self-Disclosed School, College, or Educational Institution"
+    ),
+    (
+        "WORKPLACE_INFO",
+        r'(?i)\b(?:my\s+(?:workplace|employer|company|office)\s+is|i\s+work\s+at)\s+["\']?([A-Za-z0-9\s.,-]{2,50})["\']?',
+        "MEDIUM",
+        "Self-Disclosed Workplace, Employer, or Office Location"
+    ),
+
+    (
         "CREDIT_CARD_NUMBER",
         r'\b(?:\d{4}[ -]?){3}\d{4}\b|\b3[47]\d{2}[\s-]?\d{6}[\s-]?\d{5}\b',
         "HIGH",
@@ -282,10 +351,11 @@ _STANDARD_PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "BANK_ACCOUNT_NUMBER",
-        r'\b(?:(?:bank\s+)?account\s*(?:num|no|number)?|bank\s+acc|beneficiary\s+acc(?:ount)?|transfer\s+(?:money\s+|funds\s+)?to\s+(?:bank\s+)?account|payment\s+to\s+(?:bank\s+)?account|IFSC\s+[A-Z]{4}0[A-Z0-9]{6}\s+(?:and\s+)?account)\s*(?:is|to|:|=)?\s*(\d{9,18})\b',
+        r'\b(?:(?:bank\s+)?account\s*(?:num|no|number)?|bank\s+acc|beneficiary\s+acc(?:ount)?|(?:transfer|send|remit|pay|deposit)\s+(?:money\s+|funds\s+)?to\s+(?:bank\s+)?account|payment\s+to\s+(?:bank\s+)?account|IFSC\s+[A-Z]{4}0[A-Z0-9]{6}\s+(?:and\s+)?account)\s*(?:is|to|:|=)?\s*(\d{9,18})\b',
         "HIGH",
         "Bank Account Number with contextual indicators"
     ),
+
     (
         "BANK_ACCOUNT_NUMBER",
         r'\b(?:my|the|our|beneficiary)\s+(?:bank\s+account|account\s+number|acc\s+no|account)\s+is\s+(\d{9,18})\b',
@@ -420,14 +490,45 @@ class ContextAwareEntityDetector:
         if not text or not text.strip():
             return False
         clean = text.strip().lower()
-        # If prompt contains explicit credential disclosures or tokens, it is not educational
+        # If prompt contains explicit credential disclosures, secrets, or PII tokens, it is not educational
         for _, pat, _, _ in _CREDENTIAL_DISCLOSURE_PATTERNS:
             if re.search(pat, text, re.IGNORECASE):
                 return False
+        for _, pat, _, _ in _STANDARD_PII_PATTERNS:
+            if re.search(pat, text, re.IGNORECASE):
+                return False
+
+        # If prompt contains 1st-person personal disclosures, it is not an educational inquiry
+        if re.search(r'\b(?:i|my|our|we|me)\b.*\b(?:marriage|relationship|partner|husband|wife|boyfriend|girlfriend|family|divorce|health|problems?|issues?|trouble|struggl(?:e|ing))\b', clean):
+            return False
+        for pat in _MILD_PERSONAL_CONTEXT_PATTERNS:
+            if re.search(pat, clean, re.IGNORECASE):
+                return False
+        for pat in _HIGH_PERSONAL_RISK_PATTERNS:
+            if re.search(pat, clean, re.IGNORECASE):
+                return False
+
+        # General inquiry question prefixes (e.g., "what is", "who is", "where is", "how to", "explain")
+
+        if re.match(r'^(?:what|who|where|when|why|how|explain|describe|define|tell me|is|can|could|would)\b', clean):
+            injection_keywords = {"ignore", "disregard", "system", "prompt", "jailbreak", "override", "bypass", "dan", "exfiltrate", "dump", "password", "secret"}
+            words = set(clean.split())
+            if not (words & injection_keywords):
+                return True
+
+        # Short clean standalone general queries (e.g. "Vishnu", "Garuda", "Photosynthesis", "Java")
+        words = clean.split()
+        if 1 <= len(words) <= 8 and re.match(r'^[a-zA-Z0-9\s?.\'-]+$', clean):
+            injection_keywords = {"ignore", "disregard", "system", "prompt", "jailbreak", "override", "bypass", "dan", "exfiltrate", "dump", "password", "key", "secret", "token"}
+            if not any(w in injection_keywords for w in words):
+                return True
+
         for pat in _EDUCATIONAL_INQUIRY_PATTERNS:
             if re.search(pat, clean, re.IGNORECASE):
                 return True
         return False
+
+
 
     def detect_personal_context(self, text: str) -> Dict[str, Any]:
 
@@ -605,13 +706,18 @@ class ContextAwareEntityDetector:
                         "CREDIT_CARD_NUMBER": "Financial Information (Credit Card)",
                         "BANK_ACCOUNT_NUMBER": "Financial Information (Bank Account)",
                         "BANK_ROUTING_ACCOUNT": "Financial Bank Account & Routing",
+                        "UPI_ID": "Financial Information (UPI ID / VPA)",
                         "GOVERNMENT_ID_SSN": "Government ID (SSN)",
                         "GOVERNMENT_ID_AADHAAR": "Government ID (Aadhaar)",
                         "GOVERNMENT_ID_PAN": "Government ID (PAN)",
                         "GOVERNMENT_ID_NINO": "Government ID (UK NINO)",
+                        "DRIVING_LICENSE": "Government ID (Driver's License)",
+                        "VOTER_ID": "Government ID (Voter ID)",
                         "PASSPORT_NUMBER": "Passport Document",
                         "BANK_ACCOUNT_IBAN": "Bank Account (IBAN)",
                         "MEDICAL_PATIENT_RECORD": "Protected Health Information (PHI)",
+                        "PRESCRIPTION_DATA": "Protected Health Information (Prescription & Dosage)",
+                        "CONFIDENTIAL_BUSINESS_INFO": "Confidential Business Information & Trade Secrets",
                         "PHYSICAL_STREET_ADDRESS": "Physical / Delivery Address",
                         "IP_ADDRESS": "Network IP Address",
                     }
@@ -715,4 +821,40 @@ class ContextAwareEntityDetector:
             return []
 
         return deduped
+
+    def detect_privacy_context(self, text: str) -> Dict[str, Any]:
+        """
+        Unified context detection endpoint returning structured risk summary and entity maps.
+        """
+        entities = self.detect_entities(text)
+        personal_ctx = self.detect_personal_context(text)
+        is_risk = len(entities) > 0 or personal_ctx.get("detected", False)
+        det_map: Dict[str, List[str]] = {}
+        for e in entities:
+            val = e.get("value") or e.get("detected_span") or e.get("span") or ""
+            e["value"] = val
+            det_map.setdefault(e["entity_type"], []).append(val)
+
+        risk_score = 0.0
+        if any(e.get("severity") == "CRITICAL" for e in entities):
+            risk_score = 1.0
+        elif len(entities) > 0:
+            risk_score = 0.7
+        elif personal_ctx.get("level") == "HIGH_RISK":
+            risk_score = 0.6
+        elif personal_ctx.get("level") == "WARNING":
+            risk_score = 0.3
+
+        return {
+            "is_risk": is_risk,
+            "risk_score": risk_score,
+            "detected_entities": det_map,
+            "entities": entities,
+            "personal_context": personal_ctx,
+        }
+
+
+# Alias for backward compatibility & research naming
+PrivacyContextDetector = ContextAwareEntityDetector
+
 

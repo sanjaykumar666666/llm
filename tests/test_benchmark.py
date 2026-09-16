@@ -69,6 +69,11 @@ def run_performance_benchmark():
     print(f"   - False Negative Rate  : {metrics['false_negative_rate']:.3f}")
     print(f"   - Average Latency      : {avg_latency:.2f} ms")
     print("=" * 70)
+    return metrics["accuracy"] >= 0.80
+
+
+def test_benchmark():
+    assert run_performance_benchmark() is True
 
 
 if __name__ == "__main__":

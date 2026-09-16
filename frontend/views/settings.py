@@ -102,7 +102,52 @@ def render_settings_view() -> None:
 
     st.divider()
 
-    # ── Section 2: Privacy Policies ──────────────────────────────────────────
+    # ── Section 2: Visual Theme & Color Palette Customizer ───────────────────
+    from frontend.utils.theme_manager import COLOR_THEMES, get_current_theme_key, get_current_theme
+
+    st.subheader("🎨 Workspace Color Themes & Aesthetics")
+    st.markdown("Choose your preferred aesthetic palette for Privacy Chat, Security Dashboard, and all interface components:")
+
+    current_theme_key = get_current_theme_key()
+    active_theme = get_current_theme()
+
+    # Render interactive theme cards grid (4 columns x 2 rows)
+    theme_items = list(COLOR_THEMES.items())
+    
+    col_t1, col_t2 = st.columns(2)
+    for i, (t_key, t_data) in enumerate(theme_items):
+        target_col = col_t1 if (i % 2 == 0) else col_t2
+        with target_col:
+            is_selected = (t_key == current_theme_key)
+            card_border = f"2px solid {t_data['accent_primary']}" if is_selected else "1px solid rgba(255,255,255,0.12)"
+            swatches_html = "".join([f'<span style="display:inline-block; width:18px; height:18px; border-radius:50%; background:{c}; box-shadow:0 0 8px {c}88; margin-right:4px;"></span>' for c in t_data.get("preview_colors", [])])
+            active_badge = f'<span style="background:{t_data["gradient"]}; color:#FFF; font-size:10px; font-weight:900; padding:2px 8px; border-radius:12px; margin-left:8px;">ACTIVE</span>' if is_selected else ""
+
+            st.markdown(
+                f"""
+                <div style="background:{t_data['bg_card']}; border:{card_border}; border-radius:14px; padding:14px 16px; margin-bottom:10px; box-shadow:{t_data['glow'] if is_selected else 'none'};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="font-size:15px; font-weight:800; color:{t_data['text_pure']}; display:flex; align-items:center;">
+                            {t_key} {active_badge}
+                        </div>
+                        <div>{swatches_html}</div>
+                    </div>
+                    <div style="font-size:12px; color:{t_data['text_muted']}; margin-top:4px;">{t_data['description']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            btn_label = "✅ Currently Active" if is_selected else f"Apply {t_data['name']}"
+            btn_type = "primary" if is_selected else "secondary"
+            if st.button(btn_label, key=f"btn_apply_theme_{t_data['id']}", use_container_width=True, type=btn_type):
+                if not is_selected:
+                    st.session_state["color_theme"] = t_key
+                    st.rerun()
+
+    st.divider()
+
+    # ── Section 3: Privacy Policies ──────────────────────────────────────────
     c_l, c_r = st.columns([1, 1])
 
     with c_l:

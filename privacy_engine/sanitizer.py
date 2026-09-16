@@ -11,7 +11,15 @@ Pipeline 5 Core Module:
 """
 
 import re
+from enum import Enum
 from typing import Tuple, List, Dict, Any, Optional
+
+
+class RedactionStrategy(str, Enum):
+    SYNTHETIC_MASK = "SYNTHETIC_MASK"
+    HASH_SHA256 = "HASH_SHA256"
+    BLACKOUT = "BLACKOUT"
+
 
 # ── Canonical Replacement Tokens ──────────────────────────────────────────────
 # Standardized non-disclosing placeholders
@@ -19,7 +27,18 @@ TOKEN_MAP: Dict[str, str] = {
     "EMAIL_ADDRESS": "[EMAIL_REDACTED]",
     "PHONE_NUMBER": "[PHONE_REDACTED]",
     "MEDICAL_PATIENT_RECORD": "[HEALTH_DATA_REDACTED]",
+    "PRESCRIPTION_DATA": "[HEALTH_DATA_REDACTED]",
+    "HEALTH_RECORD": "[HEALTH_DATA_REDACTED]",
+    "CONFIDENTIAL_BUSINESS_INFO": "[CONFIDENTIAL_REDACTED]",
+    "TRADE_SECRET": "[CONFIDENTIAL_REDACTED]",
+    "UPI_ID": "[UPI_ID_REDACTED]",
+    "DRIVING_LICENSE": "[LICENSE_REDACTED]",
+    "VOTER_ID": "[VOTER_ID_REDACTED]",
     "PHYSICAL_STREET_ADDRESS": "[ADDRESS_REDACTED]",
+    "PHYSICAL_LOCATION_INFO": "[LOCATION_REDACTED]",
+    "SCHOOL_INFO": "[SCHOOL_REDACTED]",
+    "WORKPLACE_INFO": "[WORKPLACE_REDACTED]",
+
     "GOVERNMENT_ID_SSN": "[SSN_REDACTED]",
     "GOVERNMENT_ID_AADHAAR": "[AADHAAR_REDACTED]",
     "GOVERNMENT_ID_PAN": "[PAN_REDACTED]",
@@ -293,9 +312,39 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
     ),
     (
         "MEDICAL_PATIENT_RECORD",
-        r'\bMRN-\d{4,8}\b|\bpatient\s+(?:intake|record|diagnostic|history|report|summary)[:\s]|diagnosed\s+with\s+[a-zA-Z0-9\s]+and\s+prescribed|prescribed\s+(?:daily\s+)?[a-zA-Z0-9\s]+(?:mg|g|mcg|tablets?)',
+        r'(?i)\b(?:MRN-\d{4,8}|patient\s+(?:intake|record|diagnostic|history|report|summary)[:\s]|(?:diagnosed\s+(?:with|of)|suffering\s+from|tested\s+positive\s+for|biopsy\s+shows|clinical\s+diagnosis|pathology\s+report)\s+[a-z0-9\s,-]{2,40}?(?:diabetes|cancer|hypertension|covid-?19|asthma|depression|anxiety|hiv|cardiac|tumor|leukemia|arthritis|alzheimer|dementia|bipolar|infection|pneumonia|hepatitis|stroke|disorder|ulcer|epilepsy)|scheduled\s+for\s+[a-zA-Z0-9\s]+(?:surgery|catheterization|procedure))',
         "HIGH",
         "[HEALTH_DATA_REDACTED]",
+    ),
+    (
+        "PRESCRIPTION_DATA",
+        r'(?i)\b(?:prescribed|prescription|dosage|taking|dose\s+of)\s+(?:daily\s+|twice\s+daily\s+|oral\s+)?[a-zA-Z0-9\s-]{2,30}?\s*(?:\d{1,4}\s*(?:mg|g|mcg|ml|tablets?|capsules?|units?))|\b(?:amoxicillin|metformin|lisinopril|atorvastatin|levothyroxine|amlodipine|metoprolol|omeprazole|losartan|albuterol|gabapentin|hydrochlorothiazide|sertraline|simvastatin|montelukast|escitalopram|pantoprazole|fluoxetine|furosemide|doxycycline|ibuprofen|paracetamol|aspirin|prednisone)\s*(?:\d{1,4}\s*(?:mg|g|mcg|ml))\b',
+        "HIGH",
+        "[HEALTH_DATA_REDACTED]",
+    ),
+    (
+        "CONFIDENTIAL_BUSINESS_INFO",
+        r'(?i)(?:\b(?:confidential\s+project|internal\s+project|project\s+codename|codename)\s*[:=]?\s*[\'"]?([A-Z][a-zA-Z0-9_-]+(?:\s+[A-Z][a-zA-Z0-9_-]+)?)|Project\s+(?:Titan|Apollo|Genesis|Prometheus|Manhattan|Starlight|Blackhawk|Vanguard|Phoenix|Mercury)\s*[-:]?\s*(?:confidential|internal\s+only|strictly\s+confidential|proprietary)|\b(?:(?:q[1-4]|quarterly|annual|fiscal\s+year|fy\d{2,4})\s+(?:revenue|sales|profit|margin|earnings|ebitda)\s*(?:is|was|=|:)\s*[\$€£₹]?\s*\d+(?:\.\d+)?\s*(?:million|billion|m|b|k)?|\b(?:internal|confidential)\s+(?:profit\s+margin|financials?|revenue|budget)\s*(?:is|was|=|:)?\s*[\$€£₹]?\s*\d+(?:\.\d+)?\s*(?:%|million|billion|m|b)?)|confidential\s+(?:company|internal|business|client)\s+(?:data|database|records?|strategy|roadmap|memo|information)|proprietary\s+(?:algorithm|architecture|source\s+code|trade\s+secret)|strictly\s+confidential\s+under\s+nda|confidential\s+client\s+contract\s+value\s*[:=]?\s*[\$€£₹]?\s*\d+)',
+        "HIGH",
+        "[CONFIDENTIAL_REDACTED]",
+    ),
+    (
+        "UPI_ID",
+        r'\b[a-zA-Z0-9.\-_]{2,49}@(okhdfcbank|okaxis|oksbi|okicici|upi|paytm|ybl|apl|axl|ibl|barodampay|federal|kotak|postbank|idfcbank|freecharge|airtel|pingpay)\b',
+        "MEDIUM",
+        "[UPI_ID_REDACTED]",
+    ),
+    (
+        "DRIVING_LICENSE",
+        r'\b[A-Z]{2}[0-9]{2}[ -]?[0-9]{4}[ -]?[0-9]{7}\b|\bDL[ -]?[A-Z0-9]{8,16}\b',
+        "HIGH",
+        "[LICENSE_REDACTED]",
+    ),
+    (
+        "VOTER_ID",
+        r'\b[A-Z]{3}[0-9]{7}\b',
+        "HIGH",
+        "[VOTER_ID_REDACTED]",
     ),
     (
         "PHYSICAL_STREET_ADDRESS",
@@ -319,7 +368,7 @@ PII_PATTERNS: List[Tuple[str, str, str, str]] = [
 
 # Existing recognized redaction placeholders to ignore during re-scanning (Idempotency)
 EXISTING_REDACTION_PATTERN = re.compile(
-    r'\[(?:EMAIL|PHONE|AADHAAR|PAN|SSN|NINO|CREDIT_CARD|BANK_ACCOUNT|PASSWORD|API_KEY|AUTH_SECRET|HEALTH_DATA|ADDRESS|PASSPORT|IP|DATABASE_CREDENTIALS|GCP_KEY|AWS_KEY|SENDGRID_KEY|SLACK_TOKEN|GITHUB_TOKEN|JWT|PRIVATE_KEY|IBAN|HEALTH_RECORD|PAYMENT_CARD|BLOCKED_ADVERSARIAL_SEQUENCE|OTP|PIN|AUTH_TOKEN|SECRET_KEY|BANK_CREDENTIAL)_REDACTED\]|\[EMAIL REDACTED\]|\[PHONE REDACTED\]|\[NAME REDACTED\]|\[AADHAAR REDACTED\]|\[PAN REDACTED\]|\[SSN REDACTED\]|\[NINO REDACTED\]|\[PASSPORT REDACTED\]|\[LICENSE REDACTED\]|\[VOTER ID REDACTED\]|\[PAYMENT CARD REDACTED\]|\[BANK ACCOUNT REDACTED\]|\[IBAN REDACTED\]|\[UPI ID REDACTED\]|\[PASSWORD REDACTED\]|\[OTP REDACTED\]|\[PIN REDACTED\]|\[AUTH TOKEN REDACTED\]|\[SECRET KEY REDACTED\]|\[BANK CREDENTIAL REDACTED\]|\[AWS KEY REDACTED\]|\[GITHUB TOKEN REDACTED\]|\[API KEY REDACTED\]|\[GCP KEY REDACTED\]|\[SLACK TOKEN REDACTED\]|\[JWT TOKEN REDACTED\]|\[BEARER TOKEN REDACTED\]|\[PRIVATE KEY REDACTED\]|\[DATABASE CREDENTIALS REDACTED\]|\[HEALTH RECORD REDACTED\]|\[ADDRESS REDACTED\]|\[IP ADDRESS REDACTED\]|\[BLOCKED_ADVERSARIAL_SEQUENCE\]',
+    r'\[(?:EMAIL|PHONE|AADHAAR|PAN|SSN|NINO|CREDIT_CARD|BANK_ACCOUNT|PASSWORD|API_KEY|AUTH_SECRET|HEALTH_DATA|CONFIDENTIAL|UPI_ID|ADDRESS|PASSPORT|LICENSE|VOTER_ID|IP|DATABASE_CREDENTIALS|GCP_KEY|AWS_KEY|SENDGRID_KEY|SLACK_TOKEN|GITHUB_TOKEN|JWT|PRIVATE_KEY|IBAN|HEALTH_RECORD|PAYMENT_CARD|BLOCKED_ADVERSARIAL_SEQUENCE|OTP|PIN|AUTH_TOKEN|SECRET_KEY|BANK_CREDENTIAL)_REDACTED\]|\[EMAIL REDACTED\]|\[PHONE REDACTED\]|\[NAME REDACTED\]|\[AADHAAR REDACTED\]|\[PAN REDACTED\]|\[SSN REDACTED\]|\[NINO REDACTED\]|\[PASSPORT REDACTED\]|\[LICENSE REDACTED\]|\[VOTER ID REDACTED\]|\[PAYMENT CARD REDACTED\]|\[BANK ACCOUNT REDACTED\]|\[IBAN REDACTED\]|\[UPI ID REDACTED\]|\[CONFIDENTIAL REDACTED\]|\[HEALTH DATA REDACTED\]|\[PASSWORD REDACTED\]|\[OTP REDACTED\]|\[PIN REDACTED\]|\[AUTH TOKEN REDACTED\]|\[SECRET KEY REDACTED\]|\[BANK CREDENTIAL REDACTED\]|\[AWS KEY REDACTED\]|\[GITHUB TOKEN REDACTED\]|\[API KEY REDACTED\]|\[GCP KEY REDACTED\]|\[SLACK TOKEN REDACTED\]|\[JWT TOKEN REDACTED\]|\[BEARER TOKEN REDACTED\]|\[PRIVATE KEY REDACTED\]|\[DATABASE CREDENTIALS REDACTED\]|\[HEALTH RECORD REDACTED\]|\[ADDRESS REDACTED\]|\[IP ADDRESS REDACTED\]|\[BLOCKED_ADVERSARIAL_SEQUENCE\]',
     re.IGNORECASE
 )
 
@@ -443,7 +492,9 @@ class PrivacySanitizer:
 
         return {
             "sanitized_text": sanitized_text,
+            "sanitized_prompt": sanitized_text,
             "entities_removed": entities_removed,
+            "entities_redacted": entities_removed,
             "detected_entities": [
                 {
                     "entity_type": ent["entity_type"],
@@ -452,9 +503,15 @@ class PrivacySanitizer:
                 }
                 for ent in entities_removed
             ],
-            "sanitization_applied": True,
+            "sanitization_applied": len(entities_removed) > 0,
             "source": "authoritative_sanitizer"
         }
+
+    def sanitize_prompt(self, text: str, strategy: Any = "SYNTHETIC_MASK", **kwargs) -> Dict[str, Any]:
+        """Alias endpoint for prompt sanitization."""
+        mode_str = strategy.value if hasattr(strategy, "value") else str(strategy)
+        return self.sanitize_text(text, mode=mode_str)
+
 
     def sanitize(self, text: str) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -463,9 +520,14 @@ class PrivacySanitizer:
         res = self.sanitize_text(text, mode="REDACT")
         return res["sanitized_text"], res.get("detected_entities", [])
 
+
     def _resolve_replacement(self, val: str, pii_type: str, default_tag: str, mode: str) -> str:
         """Determines replacement tag based on mode (REDACT, MASK, SYNTHETIC)."""
         mode_upper = mode.upper() if mode else "REDACT"
+
+        if mode_upper in ("SMART_REDACT", "REDACT_CONSISTENT", "SYNTHETIC_MASK", "CONSISTENT"):
+            return self._get_consistent_placeholder(val, pii_type, default_tag)
+
 
         if mode_upper == "MASK":
             if pii_type == "EMAIL_ADDRESS" and "@" in val:
@@ -508,6 +570,62 @@ class PrivacySanitizer:
         # Default: Canonical REDACT tag
         return TOKEN_MAP.get(pii_type, default_tag)
 
+    def _get_consistent_placeholder(self, val: str, pii_type: str, default_tag: str) -> str:
+        """Assigns consistent numbered placeholders for repeated entities (e.g. [PERSON_1], [PHONE_1])."""
+        if not hasattr(self, "_stateful_value_map"):
+            self._stateful_value_map: Dict[str, str] = {}
+            self._stateful_counters: Dict[str, int] = {}
+
+        val_key = f"{pii_type}::{val.strip().lower()}"
+        if val_key in self._stateful_value_map:
+            return self._stateful_value_map[val_key]
+
+        prefix_map = {
+            "PERSON_NAME": "PERSON",
+            "EMAIL_ADDRESS": "EMAIL",
+            "PHONE_NUMBER": "PHONE",
+            "PHYSICAL_STREET_ADDRESS": "ADDRESS",
+            "PHYSICAL_LOCATION_INFO": "LOCATION",
+            "SCHOOL_INFO": "SCHOOL",
+            "WORKPLACE_INFO": "WORKPLACE",
+
+            "CREDIT_CARD": "FINANCIAL",
+            "CREDIT_CARD_NUMBER": "FINANCIAL",
+            "BANK_ACCOUNT_NUMBER": "FINANCIAL",
+            "IBAN_ACCOUNT": "FINANCIAL",
+            "UPI_ID": "FINANCIAL",
+            "GOVERNMENT_ID_SSN": "GOVT_ID",
+            "GOVERNMENT_ID_AADHAAR": "GOVT_ID",
+            "GOVERNMENT_ID_PAN": "GOVT_ID",
+            "GOVERNMENT_ID_NINO": "GOVT_ID",
+            "DRIVING_LICENSE": "GOVT_ID",
+            "VOTER_ID": "GOVT_ID",
+            "PASSPORT_NUMBER": "GOVT_ID",
+            "CREDENTIAL_PASSWORD": "SECRET",
+            "CREDENTIAL_OTP": "SECRET",
+            "CREDENTIAL_PIN": "SECRET",
+            "CREDENTIAL_AUTH_TOKEN": "SECRET",
+            "CREDENTIAL_SECRET_KEY": "SECRET",
+            "CREDENTIAL_BANK_LOGIN": "SECRET",
+            "AWS_KEY": "SECRET",
+            "AWS_ACCESS_KEY": "SECRET",
+            "GOOGLE_CLOUD_KEY": "SECRET",
+            "OPENAI_API_KEY": "SECRET",
+            "MEDICAL_PATIENT_RECORD": "HEALTH",
+            "PRESCRIPTION_DATA": "HEALTH",
+        }
+        prefix = prefix_map.get(pii_type, "ENTITY")
+        self._stateful_counters[prefix] = self._stateful_counters.get(prefix, 0) + 1
+        placeholder = f"[{prefix}_{self._stateful_counters[prefix]}]"
+        self._stateful_value_map[val_key] = placeholder
+        return placeholder
+
+    def reset_stateful_placeholders(self):
+        """Resets consistent entity numbering session state."""
+        self._stateful_value_map = {}
+        self._stateful_counters = {}
+
+
 
 # Singleton Instance & Aliases for backward compatibility
 _GLOBAL_SANITIZER = PrivacySanitizer()
@@ -519,3 +637,5 @@ def get_sanitizer() -> PrivacySanitizer:
 
 PIISanitizer = PrivacySanitizer
 Sanitizer = PrivacySanitizer
+SmartSanitizer = PrivacySanitizer
+

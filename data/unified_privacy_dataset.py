@@ -29,6 +29,7 @@ Canonical Classes:
 
 import json
 import csv
+from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 
 CANONICAL_CLASSES = [
@@ -315,7 +316,25 @@ def get_canonical_dataset() -> List[Tuple[str, str, str]]:
     """
     Returns unified dataset as a list of:
       (text, canonical_class_name, sub_category)
+    Loads from CSV if available, otherwise falls back to inline definitions.
     """
+    csv_file = Path(__file__).resolve().parent / "unified_privacy_dataset.csv"
+    if csv_file.exists():
+        try:
+            with open(csv_file, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                loaded = []
+                for row in reader:
+                    prompt = row.get("prompt", "")
+                    cls_name = row.get("canonical_class", "SAFE")
+                    sub_cat = row.get("sub_category", "")
+                    if prompt and cls_name in CANONICAL_CLASSES:
+                        loaded.append((prompt, cls_name, sub_cat))
+                if loaded:
+                    return loaded
+        except Exception as e:
+            print(f"Warning loading CSV dataset: {e}")
+
     dataset: List[Tuple[str, str, str]] = []
 
     for text, sub in SAFE_GENERAL_SAMPLES:
@@ -412,10 +431,11 @@ def export_dataset_to_json(filepath: str) -> None:
 
 def export_dataset_to_csv(filepath: str) -> None:
     """Exports the canonical dataset to standard CSV."""
+    dataset = get_canonical_dataset()
     with open(filepath, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["prompt", "canonical_class", "canonical_id", "sub_category", "is_risk", "decision", "three_class_id", "three_class_name"])
-        for text, cls_name, sub in get_canonical_dataset():
+        for text, cls_name, sub in dataset:
             lbl_3class = CANONICAL_TO_THREE_CLASS[cls_name]
             is_risk = (cls_name != "SAFE")
             dec = "ALLOW" if not is_risk else ("WARN" if lbl_3class == 1 else "BLOCK")

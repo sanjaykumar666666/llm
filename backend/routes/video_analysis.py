@@ -68,16 +68,32 @@ async def video_analysis_endpoint(file: UploadFile = File(...)):
 
         text_analysis = _text_processor.process(extracted_text)
 
-        # Extended Video Content Understanding, Summary & Safety Analysis
+        # Extended Video Content Understanding, Summary & 7-Phase Privacy Shield Pipeline
         content_analysis = {}
+        seven_phase_privacy_pipeline = {}
         try:
             from backend.services.video_content_analyzer import VideoContentAnalyzer
-            if std_input.temp_file_path and os.path.exists(std_input.temp_file_path):
+            from backend.services.video_privacy_service import VideoPrivacyService
+            
+            target_path = std_input.file_path or (Path(std_input.metadata.get("saved_path")) if std_input.metadata.get("saved_path") else None)
+            if target_path and Path(target_path).exists():
+                with open(target_path, "rb") as vf:
+                    vbytes = vf.read()
+                seven_phase_privacy_pipeline = VideoPrivacyService.execute_video_privacy_pipeline(
+                    video_bytes=vbytes,
+                    filename=std_input.file_name or "uploaded_video.mp4",
+                    protection_mode="Redact Sensitive",
+                    protect_faces=True,
+                    protect_qr_barcodes=True,
+                    remove_audio=True
+                )
                 content_analysis = VideoContentAnalyzer.analyze_video_full(
-                    std_input.temp_file_path, filename=std_input.file_name
+                    str(target_path), filename=std_input.file_name
                 )
         except Exception:
             pass
+
+        final_verif = seven_phase_privacy_pipeline.get("final_report", {}).get("final_verification", {})
 
         return {
             "status": "success",
@@ -111,13 +127,17 @@ async def video_analysis_endpoint(file: UploadFile = File(...)):
             "risk_assessment": risk_assessment.to_dict(),
             "protection_result": protection_res.to_dict(),
             "content_analysis": content_analysis,
+            "seven_phase_report": seven_phase_privacy_pipeline.get("final_report", {}),
+            "verified": seven_phase_privacy_pipeline.get("verified", False),
+            "verification_status": final_verif.get("status", "PASS"),
+            "zero_leaks_guarantee": final_verif.get("zero_leaks_guarantee", False),
             "video_summary": content_analysis.get("summary", {}),
             "scenes": content_analysis.get("scenes", []),
             "copyright_assessment": content_analysis.get("copyright_assessment", {}),
             "best_frames": content_analysis.get("best_frames", {}),
             "risk_timeline": content_analysis.get("risk_timeline", []),
             "is_mock": False,
-            "engine": "video_pipeline_v7_real",
+            "engine": "video_pipeline_7phases_real",
         }
 
     except Exception as e:

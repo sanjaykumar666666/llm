@@ -83,15 +83,20 @@ class NaiveBayesPrivacyClassifier:
             try:
                 X_vec = self.vectorizer.transform([text])
                 probs = self.model.predict_proba(X_vec)[0]
-
                 prob_dict = {
                     cls_name: round(float(probs[idx]), 4)
                     for idx, cls_name in enumerate(self.classes)
                 }
 
-                max_idx = int(self.model.predict(X_vec)[0])
-                canonical_class = self.classes[max_idx]
-                conf = round(float(probs[max_idx]), 4)
+                if X_vec.nnz == 0:
+                    canonical_class = "SAFE"
+                    conf = 1.0
+                else:
+                    max_idx = int(self.model.predict(X_vec)[0])
+                    canonical_class = self.classes[max_idx]
+                    conf = round(float(probs[max_idx]), 4)
+
+
 
                 # Coarse 3-Class aggregation
                 p_safe = prob_dict.get("SAFE", 0.0)
@@ -127,6 +132,7 @@ class NaiveBayesPrivacyClassifier:
                 else:
                     coarse_class = "PII_PRESENT"
 
+
                 return {
                     "risk_probability": risk_prob,
                     "safe_probability": round(p_safe, 4),
@@ -138,6 +144,7 @@ class NaiveBayesPrivacyClassifier:
                     "model_status": "available",
                     "is_trained": True,
                 }
+
             except Exception:
                 pass
 

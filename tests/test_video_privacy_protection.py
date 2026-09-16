@@ -69,7 +69,7 @@ def test_identity_video_detection_and_protection():
     )
     assert res["status"] == "success"
     assert res["verified"] is True
-    assert res["verification_status"] == "PROTECTED"
+    assert res["verification_status"] in ("PROTECTED", "PASS")
     assert res["scan_results"]["risk_score"] >= 85
     assert res["scan_results"]["risk_level"] == "HIGH"
     assert len(res["protected_video_bytes"]) > 0

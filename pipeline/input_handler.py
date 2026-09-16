@@ -368,23 +368,16 @@ class MultimodalInputHandler:
                 f"Video file size ({size_mb:.1f} MB) exceeds maximum of {config.MAX_FILE_SIZE_MB} MB."
             )
 
-        # Validate basic video header signature
-        if not errors and len(file_bytes) >= 12:
-            # Check common video signatures (ftyp for mp4/mov, RIFF for avi, matroska for mkv/webm)
-            header = file_bytes[:32]
-            is_valid_header = (
-                b"ftyp" in header or
-                header.startswith(b"RIFF") or
-                header.startswith(b"\x1a\x45\xdf\xa3") or  # MKV/WebM
-                header.startswith(b"\x00\x00\x00") or      # Generic MP4/MOV atom
-                ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]
-            )
-            if not is_valid_header:
-                errors.append("Corrupted video file: unrecognized video container signature.")
+        # Validate video payload via Phase 1 VideoPrivacyService engine
+        from backend.services.video_privacy_service import VideoPrivacyService
+        is_valid_vid, val_err, meta_report = VideoPrivacyService.validate_video_bytes(file_bytes, filename)
+        if not is_valid_vid:
+            errors.append(val_err or "Video validation failed.")
 
         if errors:
             inp.validation_status = "INVALID"
             inp.validation_errors = errors
+            inp.metadata = meta_report or {"error": val_err}
             return inp
 
         # Save to temp directory for downstream processing
@@ -403,11 +396,13 @@ class MultimodalInputHandler:
         inp.file_size_bytes = len(file_bytes)
         inp.content_type = VIDEO_CONTENT_TYPES.get(ext, "video/mp4")
         inp.validation_status = "VALID"
-        inp.metadata = {
+        inp.metadata = meta_report or {
             "original_filename": filename,
             "saved_path": str(temp_path),
             "size_bytes": len(file_bytes),
         }
+        inp.metadata["original_filename"] = filename
+        inp.metadata["saved_path"] = str(temp_path)
 
         return inp
 

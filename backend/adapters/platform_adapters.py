@@ -269,10 +269,11 @@ class YouTubeAdapter(SocialMediaAdapter):
             return sampled
         try:
             ydl_opts = {
-                "format": "worst[ext=mp4]/worst",
+                "format": "best[height<=480]/worst[ext=mp4]/worst/best",
                 "quiet": True,
                 "no_warnings": True,
-                "socket_timeout": 3,
+                "ignoreerrors": True,
+                "socket_timeout": 4,
                 "skip_download": True,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

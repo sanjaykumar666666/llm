@@ -28,15 +28,17 @@ except ImportError:
 
 # ── Configuration Constants ───────────────────────────────────────────────────
 DEFAULT_MODEL = os.getenv("DEFAULT_LLM_MODEL") or getattr(config, "DEFAULT_LLM_MODEL", "gemini-3.5-flash-lite")
-TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "15.0"))
+TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "7.0"))
 MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
 
-# Supported standard models in preferred cascade order (Active models on Google GenAI API)
+# Supported standard models in preferred cascade order (Fast Flash models prioritized for < 5s SLA)
 STANDARD_CANDIDATE_MODELS = [
     DEFAULT_MODEL,
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
-    "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
 ]
 

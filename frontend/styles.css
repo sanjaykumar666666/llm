@@ -178,8 +178,35 @@ section.main,
     width: 100% !important;
 }
 
+/* ── Rainbow Gradient Design Tokens & Animated Aurora ───────────── */
+:root {
+    --rainbow-gradient: linear-gradient(135deg, #FF007A 0%, #FF5E3A 20%, #FFAE00 40%, #00F5A0 60%, #00D9F6 80%, #7928CA 100%);
+    --rainbow-border: linear-gradient(90deg, #FF007A, #FF7A00, #FFD600, #00F5A0, #00D9F6, #7928CA, #FF007A);
+    --rainbow-mesh: radial-gradient(at 0% 0%, rgba(255, 0, 122, 0.20) 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, rgba(0, 217, 246, 0.20) 0px, transparent 50%),
+                    radial-gradient(at 100% 100%, rgba(121, 40, 202, 0.20) 0px, transparent 50%),
+                    radial-gradient(at 0% 100%, rgba(0, 245, 160, 0.20) 0px, transparent 50%);
+    --rainbow-glow: 0 0 35px rgba(0, 217, 246, 0.35), 0 0 50px rgba(255, 0, 122, 0.25);
+}
+
+@keyframes rainbowShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes rainbowBorderShift {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes rainbowGlowPulse {
+    0%, 100% { box-shadow: 0 0 25px rgba(255, 0, 122, 0.4), 0 0 45px rgba(0, 217, 246, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(0, 245, 160, 0.5), 0 0 65px rgba(121, 40, 202, 0.45); }
+}
+
 /* ═══════════════════════════════════════════════════════════════════
-   PREMIUM SIDEBAR — 270px, Deep Navy, Glowing Gradient & Hover
+   PREMIUM RAINBOW SIDEBAR — Luminous Glowing Border & Fluid Gradients
    ═══════════════════════════════════════════════════════════════════ */
 
 [data-testid="stSidebar"] {
@@ -195,15 +222,11 @@ section[data-testid="stSidebar"] > div:first-child,
 div[data-testid="stSidebarContent"],
 div[data-testid="stSidebarUserContent"],
 div[data-testid="stSidebarHeader"],
-[data-testid="stSidebar"],
-.st-emotion-cache-1cypcdb,
-.st-emotion-cache-6qob1r,
-.st-emotion-cache-12fmwca,
-.st-emotion-cache-1r6slb0 {
-    background: var(--bg-sidebar, linear-gradient(180deg, #050d1e 0%, #08162d 40%, #0b1c38 100%)) !important;
-    background-color: var(--bg-sidebar-base, #050d1e) !important;
-    border-right: 1px solid var(--border-sidebar, rgba(59, 130, 246, 0.20)) !important;
-    box-shadow: var(--shadow-sidebar, 4px 0 40px rgba(0, 0, 0, 0.6)) !important;
+[data-testid="stSidebar"] {
+    background: var(--bg-surface, #090f26) !important;
+    background-color: var(--bg-surface, #090f26) !important;
+    border-right: 2px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 4px 0 40px rgba(0, 0, 0, 0.35) !important;
 }
 
 /* Sidebar navigation buttons (Inactive) */
@@ -216,24 +239,24 @@ div[data-testid="stSidebar"] button,
 div[data-testid="stSidebar"] .stButton button,
 div[data-testid="stSidebar"] [data-testid="baseButton-secondary"],
 div[data-testid="stSidebar"] button[kind="secondary"] {
-    background: var(--btn-sidebar-bg, rgba(10, 25, 48, 0.65)) !important;
-    background-color: var(--btn-sidebar-bg, rgba(10, 25, 48, 0.65)) !important;
-    color: var(--btn-sidebar-color, #94A3B8) !important;
-    border: 1px solid var(--btn-sidebar-border, rgba(59, 130, 246, 0.14)) !important;
+    background: rgba(15, 23, 42, 0.65) !important;
+    background-color: rgba(15, 23, 42, 0.65) !important;
+    color: var(--text-pure, #F8FAFC) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
     border-radius: 13px !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     font-size: 13.5px !important;
     font-weight: 600 !important;
-    padding: 13px 16px !important;
+    padding: 12px 16px !important;
     margin-bottom: 4px !important;
     text-align: left !important;
     display: flex !important;
     align-items: center !important;
     gap: 10px !important;
     box-shadow: none !important;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transition: all 0.25s ease !important;
     width: 100% !important;
-    min-height: 52px !important;
+    min-height: 48px !important;
     letter-spacing: 0.01em !important;
     white-space: nowrap !important;
     position: relative !important;
@@ -242,15 +265,13 @@ div[data-testid="stSidebar"] button[kind="secondary"] {
 section[data-testid="stSidebar"] button:hover,
 section[data-testid="stSidebar"] button[kind="secondary"]:hover,
 div[data-testid="stSidebar"] button:hover {
-    background: var(--btn-sidebar-hover-bg, rgba(6, 182, 212, 0.14)) !important;
-    background-color: var(--btn-sidebar-hover-bg, rgba(6, 182, 212, 0.14)) !important;
-    color: var(--btn-sidebar-hover-color, #F8FAFC) !important;
-    border-color: var(--btn-sidebar-hover-border, rgba(6, 182, 212, 0.45)) !important;
-    transform: translateX(5px) !important;
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.22), inset 0 0 15px rgba(6, 182, 212, 0.06) !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    transform: translateX(4px) !important;
 }
 
-/* Active Navigation Item (Guaranteed Deep Blue & Purple Gradient — Never Red) */
+/* Active Navigation Item */
 section[data-testid="stSidebar"] [data-testid="baseButton-primary"],
 section[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
 section[data-testid="stSidebar"] button[kind="primary"],
@@ -258,21 +279,17 @@ section[data-testid="stSidebar"] .stButton > button[kind="primary"],
 div[data-testid="stSidebar"] [data-testid="baseButton-primary"],
 div[data-testid="stSidebar"] [data-testid="stBaseButton-primary"],
 div[data-testid="stSidebar"] button[kind="primary"] {
-    background: linear-gradient(135deg, #2563EB 0%, #7C3AED 50%, #8B5CF6 100%) !important;
-    background-color: #2563EB !important;
+    background: var(--theme-gradient, linear-gradient(135deg, #FF007A 0%, #00D9F6 100%)) !important;
+    background-size: 200% 200% !important;
     color: #FFFFFF !important;
-    border: 1px solid rgba(147, 197, 253, 0.45) !important;
-    border-left: 3.5px solid #38BDF8 !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.6) !important;
     border-radius: 13px !important;
     font-weight: 800 !important;
     font-size: 13.5px !important;
-    box-shadow:
-        0 4px 24px rgba(37, 99, 235, 0.5),
-        0 0 35px rgba(139, 92, 246, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
-    transform: translateX(5px) !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
-    min-height: 52px !important;
+    box-shadow: var(--theme-glow, 0 0 25px rgba(0, 217, 246, 0.4)) !important;
+    transform: translateX(4px) !important;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+    min-height: 48px !important;
     white-space: nowrap !important;
 }
 
@@ -280,11 +297,8 @@ section[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover,
 section[data-testid="stSidebar"] button[kind="primary"]:hover,
 div[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover,
 div[data-testid="stSidebar"] button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #A78BFA 100%) !important;
-    box-shadow:
-        0 6px 30px rgba(37, 99, 235, 0.65),
-        0 0 45px rgba(139, 92, 246, 0.35) !important;
-    transform: translateX(5px) scale(1.01) !important;
+    background: var(--theme-gradient, linear-gradient(135deg, #FF007A 0%, #00D9F6 100%)) !important;
+    transform: translateX(4px) scale(1.01) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -325,33 +339,37 @@ div.stButton > button[key*="btn_qa_"] {
 }
 
 div.stButton > button[key*="btn_qa_text_analysis"] {
-    background: linear-gradient(135deg, #2563EB, #1D4ED8) !important;
-    border: 1px solid rgba(59, 130, 246, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    background: linear-gradient(135deg, #00D9F6 0%, #3B82F6 100%) !important;
+    border: 1px solid rgba(0, 217, 246, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(0, 217, 246, 0.3) !important;
     color: #FFFFFF !important;
+    font-weight: 800 !important;
 }
 div.stButton > button[key*="btn_qa_image_analysis"] {
-    background: linear-gradient(135deg, #059669, #047857) !important;
-    border: 1px solid rgba(16, 185, 129, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+    background: linear-gradient(135deg, #00F5A0 0%, #10B981 100%) !important;
+    border: 1px solid rgba(0, 245, 160, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(0, 245, 160, 0.3) !important;
     color: #FFFFFF !important;
+    font-weight: 800 !important;
 }
 div.stButton > button[key*="btn_qa_video_analysis"] {
-    background: linear-gradient(135deg, #7C3AED, #6D28D9) !important;
-    border: 1px solid rgba(139, 92, 246, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25) !important;
+    background: linear-gradient(135deg, #7928CA 0%, #8B5CF6 100%) !important;
+    border: 1px solid rgba(121, 40, 202, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(121, 40, 202, 0.3) !important;
     color: #FFFFFF !important;
+    font-weight: 800 !important;
 }
 div.stButton > button[key*="btn_qa_youtube_analyzer"] {
-    background: linear-gradient(135deg, #DC2626, #B91C1C) !important;
-    border: 1px solid rgba(239, 68, 68, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25) !important;
+    background: linear-gradient(135deg, #FF007A 0%, #FF5E3A 100%) !important;
+    border: 1px solid rgba(255, 0, 122, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(255, 0, 122, 0.3) !important;
     color: #FFFFFF !important;
+    font-weight: 800 !important;
 }
 
 div.stButton > button[key*="btn_qa_"]:hover {
-    transform: translateY(-2px) scale(1.02) !important;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+    transform: translateY(-3px) scale(1.03) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

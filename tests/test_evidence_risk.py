@@ -70,3 +70,16 @@ avg_lat = total_latency / len(test_cases)
 print("\n" + "=" * 85)
 print(f"ALL {len(test_cases)} TESTS COMPLETED. Average Inference Latency: {avg_lat:.2f} ms")
 print("=" * 85)
+
+
+def test_evidence_risk():
+    for label, prompt in test_cases:
+        res = run_full_analysis(prompt)
+        assert res is not None
+        assert "risk_score" in res
+        assert "decision" in res
+        assert res["decision"] in ["ALLOW", "WARN", "SANITIZE", "BLOCK"]
+
+
+if __name__ == "__main__":
+    pass

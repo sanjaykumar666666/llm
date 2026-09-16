@@ -22,143 +22,18 @@ st.set_page_config(
 )
 
 # Load Custom CSS & Theme Injector
-if "theme" not in st.session_state:
-    st.session_state["theme"] = "dark"
+from frontend.utils.theme_manager import inject_theme_css, get_current_theme_key
+
+if "color_theme" not in st.session_state:
+    st.session_state["color_theme"] = "🌈 Rainbow Aurora"
 
 css_path = Path(__file__).parent / "styles.css"
 if css_path.exists():
     with open(css_path, "r", encoding="utf-8") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-if st.session_state.get("theme") == "light":
-    st.markdown(
-        """
-        <style>
-        :root {
-            --bg-void: #F8FAFC;
-            --bg-surface: #FFFFFF;
-            --bg-card: #FFFFFF;
-            --bg-card2: #F1F5F9;
-            --bg-card3: #E2E8F0;
-            --bg-input: #FFFFFF;
-            --text-pure: #0F172A;
-            --text-muted: #64748B;
-            --border: rgba(203, 213, 225, 0.7);
-            --border-blue: rgba(59, 130, 246, 0.35);
-            --border-cyan: rgba(6, 182, 212, 0.4);
-            --bg-sidebar: #FFFFFF;
-            --bg-sidebar-base: #FFFFFF;
-            --border-sidebar: #E2E8F0;
-            --shadow-sidebar: 2px 0 20px rgba(0, 0, 0, 0.04);
-            --btn-sidebar-bg: #F8FAFC;
-            --btn-sidebar-color: #334155;
-            --btn-sidebar-border: #E2E8F0;
-            --btn-sidebar-hover-bg: #EFF6FF;
-            --btn-sidebar-hover-color: #1D4ED8;
-            --btn-sidebar-hover-border: #93C5FD;
-        }
-        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
-            background: #F8FAFC !important;
-            background-color: #F8FAFC !important;
-            color: #0F172A !important;
-        }
-        .stApp::before {
-            display: none !important;
-        }
-        div[data-testid="stSidebarNav"],
-        section[data-testid="stSidebar"],
-        section[data-testid="stSidebar"] > div:first-child,
-        div[data-testid="stSidebarContent"],
-        div[data-testid="stSidebarUserContent"],
-        div[data-testid="stSidebarHeader"],
-        [data-testid="stSidebar"] {
-            background: #FFFFFF !important;
-            background-color: #FFFFFF !important;
-            border-right: 1px solid #E2E8F0 !important;
-            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.03) !important;
-        }
-        section[data-testid="stSidebar"] button,
-        section[data-testid="stSidebar"] .stButton > button,
-        section[data-testid="stSidebar"] [data-testid="baseButton-secondary"],
-        div[data-testid="stSidebar"] button,
-        div[data-testid="stSidebar"] .stButton button {
-            background: #F8FAFC !important;
-            background-color: #F8FAFC !important;
-            color: #334155 !important;
-            border: 1px solid #E2E8F0 !important;
-        }
-        section[data-testid="stSidebar"] button:hover,
-        div[data-testid="stSidebar"] button:hover {
-            background: #EFF6FF !important;
-            color: #1D4ED8 !important;
-            border-color: #93C5FD !important;
-        }
-        section[data-testid="stSidebar"] [data-testid="baseButton-primary"],
-        section[data-testid="stSidebar"] button[kind="primary"],
-        div[data-testid="stSidebar"] [data-testid="baseButton-primary"],
-        div[data-testid="stSidebar"] button[kind="primary"] {
-            background: linear-gradient(135deg, #2563EB 0%, #3B82F6 100%) !important;
-            background-color: #2563EB !important;
-            color: #FFFFFF !important;
-            border: 1px solid #2563EB !important;
-            border-left: 4px solid #1D4ED8 !important;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25) !important;
-        }
-        .stTextArea textarea,
-        .stTextInput input {
-            background: #FFFFFF !important;
-            color: #0F172A !important;
-            border: 1px solid #CBD5E1 !important;
-        }
-        div[data-testid="stExpander"] {
-            background: #FFFFFF !important;
-            border: 1px solid #E2E8F0 !important;
-        }
-        code, pre {
-            background: #F1F5F9 !important;
-            border: 1px solid #E2E8F0 !important;
-            color: #1E40AF !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.markdown(
-        """
-        <style>
-        :root {
-            --bg-void: #050914;
-            --bg-surface: #08111F;
-            --bg-card: rgba(13, 23, 41, 0.85);
-            --bg-card2: #101C31;
-            --bg-card3: #111D34;
-            --bg-input: #0A1324;
-            --text-pure: #F8FAFC;
-            --text-muted: #94A3B8;
-            --border: rgba(255, 255, 255, 0.09);
-            --border-blue: rgba(59, 130, 246, 0.30);
-            --border-cyan: rgba(6, 182, 212, 0.40);
-            --bg-sidebar: linear-gradient(180deg, #050d1e 0%, #08162d 40%, #0b1c38 100%);
-            --bg-sidebar-base: #050d1e;
-            --border-sidebar: rgba(59, 130, 246, 0.20);
-            --shadow-sidebar: 4px 0 40px rgba(0, 0, 0, 0.6);
-            --btn-sidebar-bg: rgba(10, 25, 48, 0.65);
-            --btn-sidebar-color: #94A3B8;
-            --btn-sidebar-border: rgba(59, 130, 246, 0.14);
-            --btn-sidebar-hover-bg: rgba(6, 182, 212, 0.14);
-            --btn-sidebar-hover-color: #F8FAFC;
-            --btn-sidebar-hover-border: rgba(6, 182, 212, 0.45);
-        }
-        html, body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main, .main {
-            background: #050914 !important;
-            background-color: #050914 !important;
-            color: #F8FAFC !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+# Inject active theme stylesheet
+inject_theme_css()
 
 # Import Sidebar (lightweight — no heavy deps)
 from frontend.components.sidebar import render_sidebar
@@ -215,19 +90,15 @@ def main():
     elif page in ("image privacy", "image analysis", "image"):
         from frontend.views.image_analyzer import render_image_analyzer_view
         render_image_analyzer_view()
-    elif page in ("ai privacy twin", "privacy twin", "twin", "synthetic twin"):
-        from frontend.views.privacy_twin_view import render_privacy_twin_view
-        render_privacy_twin_view()
     elif page in ("video privacy", "video analysis", "video"):
         from frontend.views.video_analyzer import render_video_analyzer_view
         render_video_analyzer_view()
+
     elif page in ("youtube analyzer", "youtube", "youtube privacy"):
         from frontend.views.youtube_analyzer import render_youtube_analyzer_view
         render_youtube_analyzer_view()
-    elif page in ("social post creator", "social post", "social", "instasafe", "instagram"):
-        from frontend.views.social_creator_platform import render_social_creator_platform_view
-        render_social_creator_platform_view()
     elif page in ("canvas", "canvas editor", "canvas workspace", "ai summarizer", "summarizer"):
+
         st.session_state["active_tool"] = "✍️ Canvas"
         from frontend.views.text_summarizer import render_text_summarizer_view
         render_text_summarizer_view()
@@ -239,6 +110,9 @@ def main():
     elif page in ("prompt security", "security", "injection"):
         from frontend.views.injection_detector import render_injection_detector_view
         render_injection_detector_view()
+    elif page in ("research & benchmarks", "research", "ablation", "benchmarks"):
+        from frontend.views.privacy_research_view import render_privacy_research_view
+        render_privacy_research_view()
     elif page in ("pipeline", "architecture", "architecture & pipeline"):
         from frontend.views.pipeline_view import render_pipeline_view
         render_pipeline_view()

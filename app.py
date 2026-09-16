@@ -1,12 +1,24 @@
-"""
-Streamlit Frontend Interface Entry Point.
-File Location: app.py
-"""
-
+import os
+import sys
 from pathlib import Path
+
+# Suppress low-level C++ FFmpeg and OpenCV DNN notices
+os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+try:
+    import cv2
+    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+except Exception:
+    pass
+
 import streamlit as st
 
-logo_path = Path(__file__).resolve().parent / "frontend" / "assets" / "logo.png"
+# Anchor root directory in sys.path
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+logo_path = ROOT_DIR / "frontend" / "assets" / "logo.png"
 
 # Guarantee wide layout from the very first frame
 try:

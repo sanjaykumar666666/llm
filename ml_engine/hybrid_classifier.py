@@ -63,7 +63,16 @@ class HybridPrivacyClassifier:
         # Determine active classification source and dynamic alpha weight
         if bert_available and nb_available:
             classification_source = "hybrid_ml"
-            active_alpha = self.alpha
+            # Dynamic Alpha Calibration: adapt weight based on relative confidence
+            b_conf = max(bert_probs.values()) if bert_probs else 0.0
+            nb_conf = max(nb_probs.values()) if nb_probs else 0.0
+            if nb_conf > 0.75 and b_conf < 0.60:
+                active_alpha = 0.25  # Favor highly confident Naive Bayes token matches
+            elif b_conf > 0.85 and nb_conf < 0.60:
+                active_alpha = 0.75  # Favor highly confident BERT contextual semantics
+            else:
+                total_conf = (b_conf + nb_conf) or 1.0
+                active_alpha = max(0.20, min(0.80, round(b_conf / total_conf, 2)))
             model_status = "available"
         elif bert_available and not nb_available:
             classification_source = "bert_only"
@@ -122,7 +131,8 @@ class HybridPrivacyClassifier:
             "model_status": model_status,
             "classification_source": classification_source,
             "hybrid_risk_score": hybrid_risk,
-            "alpha_weight": active_alpha,
+            "alpha_weight": self.alpha,
+            "dynamic_alpha_weight": active_alpha,
             "inference_latency_ms": round(elapsed_ms, 2),
         }
 
@@ -144,20 +154,39 @@ class HybridPrivacyClassifier:
         entropy = meta_feats.get("shannon_entropy", 0.0)
         entropy_signal = min(1.0, max(0.0, (entropy - 4.0) / 2.0)) if len(unified_text) > 8 else 0.0
 
-        # Weighted Ensemble Fusion
+        # Entity-adjusted score based on category severity
+        canonical_class = pred.get("canonical_class", "SAFE")
+        class_severities = {
+            "SAFE": 0.0,
+            "PERSONAL_CONTEXT": 0.35,
+            "IDENTITY_INFORMATION": 0.45,
+            "CONTACT_INFORMATION": 0.45,
+            "FINANCIAL_INFORMATION": 0.85,
+            "CREDENTIAL": 0.95,
+            "GOVERNMENT_ID": 0.85,
+            "AUTHENTICATION_SECRET": 1.0,
+            "PROMPT_INJECTION": 0.95,
+            "OTHER_SENSITIVE": 0.50,
+        }
+        class_severity = class_severities.get(canonical_class, 0.50)
+        eff_entity_severity = max(max_severity, class_severity if (regex_signal > 0 or canonical_class != "SAFE") else 0.0)
+
+        # Weighted Ensemble Fusion scaled by entity severity
         weighted_score = (
-            (0.35 * nb_score) +
-            (0.25 * bert_score) +
-            (0.25 * max(regex_signal, max_severity)) +
-            (0.15 * entropy_signal)
+            (0.30 * nb_score * (class_severity if class_severity > 0 else 1.0)) +
+            (0.30 * bert_score * (class_severity if class_severity > 0 else 1.0)) +
+            (0.30 * eff_entity_severity) +
+            (0.10 * entropy_signal)
         )
 
         if regex_signal == 0 and max_severity == 0 and bert_score < 0.15 and nb_score < 0.20:
             final_risk_score = 0.0
-        elif max_severity >= 0.95 or meta_feats.get("regex_pii_detected_count", 0) >= 3:
+        elif max_severity >= 0.90 or canonical_class in ("CREDENTIAL", "AUTHENTICATION_SECRET", "PROMPT_INJECTION", "FINANCIAL_INFORMATION") or meta_feats.get("regex_pii_detected_count", 0) >= 3:
             final_risk_score = max(weighted_score, 0.88)
-        elif regex_signal > 0:
-            final_risk_score = max(weighted_score, 0.45)
+        elif regex_signal > 0 or max_severity > 0:
+            final_risk_score = max(min(weighted_score, 0.65), 0.45)
+        elif canonical_class != "SAFE":
+            final_risk_score = max(min(weighted_score, 0.65), 0.35)
         else:
             final_risk_score = weighted_score
 
